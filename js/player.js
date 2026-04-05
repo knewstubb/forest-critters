@@ -125,6 +125,7 @@ class Player {
   }
 
   takeDamage(amount) {
+    if (typeof Game !== 'undefined' && Game.devMode) return;
     // Hat or gold armor reduces damage
     if (this.outfit.hat || this.hasItem('hat')) {
       amount = Math.floor(amount * 0.5);
@@ -137,6 +138,7 @@ class Player {
   }
 
   faint(duration) {
+    if (typeof Game !== 'undefined' && Game.devMode) return;
     this.fainted = true;
     this.faintTimer = duration || 3;
   }

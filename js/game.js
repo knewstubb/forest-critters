@@ -26,6 +26,7 @@ const Game = {
   placementMode: null, // { type } — when set, shows ghost preview for placing
   running: false,
   lastTime: 0,
+  devMode: false,
 
   start(charType) {
     document.getElementById('character-select').style.display = 'none';
@@ -1692,6 +1693,7 @@ const _origStart = Game.start.bind(Game);
 Game.start = function(charType) {
   const devMode = document.getElementById('dev-mode').checked;
   _origStart(charType);
+  this.devMode = devMode;
   document.getElementById('new-game-btn').style.display = 'block';
   if (devMode) {
     this.player.addItem('wood', 50);
