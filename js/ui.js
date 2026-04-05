@@ -96,31 +96,31 @@ const UI = {
     const stoneCount = player.countItem('stone');
     const goldCount = player.countItem('gold');
     const recipes = [
-      { name:'Knife', type:'knife', res:'wood', cost:10, icon:'🔪' },
-      { name:'Sword', type:'sword', res:'wood', cost:10, icon:'⚔️' },
-      { name:'Pickaxe', type:'pickaxe', res:'wood', cost:10, icon:'⛏️' },
-      { name:'Trowel', type:'trowel', res:'wood', cost:10, icon:'🔧' },
-      { name:'Gold Sword', type:'gold_sword', res:'gold', cost:8, icon:'🗡️' },
-      { name:'Gold Axe', type:'gold_axe', res:'gold', cost:8, icon:'🪓' },
-      { name:'Gold Pickaxe', type:'gold_pickaxe', res:'gold', cost:8, icon:'⛏️' },
-      { name:'Gold Armor', type:'gold_armor', res:'gold', cost:12, icon:'🛡️' },
-      { name:'House', type:'house', res:'wood', cost:40, icon:'🏠' },
-      { name:'Pavement', type:'pavement', res:'stone', cost:3, icon:'🧱' },
-      { name:'Hotel', type:'hotel', res:'wood', cost:9, icon:'🏨' },
-      { name:'Fountain', type:'fountain', res:'gold', cost:10, icon:'⛲' },
-      { name:'Statue', type:'statue', res:'gold', cost:15, icon:'🗿' },
-      { name:'Garden', type:'garden', res:'gold', cost:6, icon:'🌷' },
-      { name:'Market', type:'market', res:'gold', cost:20, icon:'🏪' },
+      { name:'Knife', type:'knife', res:'wood', cost:CONFIG.costs.knife, icon:'🔪' },
+      { name:'Sword', type:'sword', res:'wood', cost:CONFIG.costs.sword, icon:'⚔️' },
+      { name:'Pickaxe', type:'pickaxe', res:'wood', cost:CONFIG.costs.pickaxe, icon:'⛏️' },
+      { name:'Trowel', type:'trowel', res:'wood', cost:CONFIG.costs.trowel, icon:'🔧' },
+      { name:'Gold Sword', type:'gold_sword', res:'gold', cost:CONFIG.costs.gold_sword, icon:'🗡️' },
+      { name:'Gold Axe', type:'gold_axe', res:'gold', cost:CONFIG.costs.gold_axe, icon:'🪓' },
+      { name:'Gold Pickaxe', type:'gold_pickaxe', res:'gold', cost:CONFIG.costs.gold_pickaxe, icon:'⛏️' },
+      { name:'Gold Armor', type:'gold_armor', res:'gold', cost:CONFIG.costs.gold_armor, icon:'🛡️' },
+      { name:'House', type:'house', res:'wood', cost:CONFIG.costs.house, icon:'🏠' },
+      { name:'Pavement', type:'pavement', res:'stone', cost:CONFIG.costs.pavement, icon:'🧱' },
+      { name:'Hotel', type:'hotel', res:'wood', cost:CONFIG.costs.hotel, icon:'🏨' },
+      { name:'Fountain', type:'fountain', res:'gold', cost:CONFIG.costs.fountain, icon:'⛲' },
+      { name:'Statue', type:'statue', res:'gold', cost:CONFIG.costs.statue, icon:'🗿' },
+      { name:'Garden', type:'garden', res:'gold', cost:CONFIG.costs.garden, icon:'🌷' },
+      { name:'Market', type:'market', res:'gold', cost:CONFIG.costs.market, icon:'🏪' },
     ];
 
     const upgrades = game && player.houseBuilt ? [
-      { name:'House+ (bigger room)', type:'up_house', res:'wood', cost:50, icon:'🏠★', done: game.upgrades.house },
-      { name:'Wardrobe (clothing)', type:'up_wardrobe', res:'wood', cost:3, icon:'👔', done: game.upgrades.wardrobe },
-      { name:'Mirror (change character)', type:'up_mirror', res:'stone', cost:3, icon:'🪞', done: game.upgrades.mirror },
-      { name:'Fireplace+ (3 slots)', type:'up_fireplace', res:'stone', cost:30, icon:'🔥★', done: game.upgrades.fireplace },
-      { name:'Fridge (20 food slots)', type:'up_fridge', res:'stone', cost:40, icon:'🧊', done: game.upgrades.fridge },
-      { name:'Bed+ (15s sleep)', type:'up_bed', res:'wood', cost:50, icon:'🛏️★', done: game.upgrades.bed },
-      { name:'Axe+ (5 slabs/tree)', type:'up_axe', res:'stone', cost:45, icon:'🪓★', done: game.upgrades.axe },
+      { name:'House+ (bigger room)', type:'up_house', res:'wood', cost:CONFIG.upgradeCosts.house, icon:'🏠★', done: game.upgrades.house },
+      { name:'Wardrobe (clothing)', type:'up_wardrobe', res:'wood', cost:CONFIG.upgradeCosts.wardrobe, icon:'👔', done: game.upgrades.wardrobe },
+      { name:'Mirror (change character)', type:'up_mirror', res:'stone', cost:CONFIG.upgradeCosts.mirror, icon:'🪞', done: game.upgrades.mirror },
+      { name:'Fireplace+ (3 slots)', type:'up_fireplace', res:'stone', cost:CONFIG.upgradeCosts.fireplace, icon:'🔥★', done: game.upgrades.fireplace },
+      { name:'Fridge (20 food slots)', type:'up_fridge', res:'stone', cost:CONFIG.upgradeCosts.fridge, icon:'🧊', done: game.upgrades.fridge },
+      { name:'Bed+ (15s sleep)', type:'up_bed', res:'wood', cost:CONFIG.upgradeCosts.bed, icon:'🛏️★', done: game.upgrades.bed },
+      { name:'Axe+ (5 slabs/tree)', type:'up_axe', res:'stone', cost:CONFIG.upgradeCosts.axe, icon:'🪓★', done: game.upgrades.axe },
     ] : [];
 
     // Sell prices

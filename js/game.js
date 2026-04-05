@@ -1129,3 +1129,93 @@ window.addEventListener('beforeunload', () => {
 });
 
 refreshStartScreen();
+
+// ---- SETTINGS PAGE ----
+function buildSettingsUI() {
+  const screen = document.getElementById('settings-screen');
+  const content = document.getElementById('settings-content');
+
+  const sections = [
+    { title: '🔨 Crafting Costs', key: 'costs', items: [
+      ['knife','Knife (wood)'],['sword','Sword (wood)'],['pickaxe','Pickaxe (wood)'],['trowel','Trowel (wood)'],
+      ['gold_sword','Gold Sword (gold)'],['gold_axe','Gold Axe (gold)'],['gold_pickaxe','Gold Pickaxe (gold)'],['gold_armor','Gold Armor (gold)'],
+      ['house','House (wood)'],['pavement','Pavement (stone)'],['hotel','Hotel (wood)'],
+      ['fountain','Fountain (gold)'],['statue','Statue (gold)'],['garden','Garden (gold)'],['market','Market (gold)'],
+    ]},
+    { title: '⬆️ Upgrade Costs', key: 'upgradeCosts', items: [
+      ['house','House+ (wood)'],['wardrobe','Wardrobe (wood)'],['mirror','Mirror (stone)'],
+      ['fireplace','Fireplace+ (stone)'],['fridge','Fridge (stone)'],['bed','Bed+ (wood)'],['axe','Axe+ (stone)'],
+    ]},
+    { title: '💰 Sell Prices', key: 'sellPrices', items: [
+      ['human_meat','Human Meat'],['apple','Apple'],['fruit','Fruit'],
+      ['cooked_human_meat','Cooked Human Meat'],['cooked_apple','Cooked Apple'],['cooked_fruit','Cooked Fruit'],
+    ]},
+    { title: '🌲 Yields & Quantities', key: 'yields', items: [
+      ['woodPerChop','Wood per chop'],['stonePerMine','Stone per mine'],
+      ['treeSabs','Tree slabs (normal)'],['treeSabsUpgraded','Tree slabs (upgraded)'],
+      ['stoneHits','Stone hits to break'],['goldChanceStone','Gold chance (stone, 0-1)'],['goldChanceDirt','Gold chance (dirt, 0-1)'],
+      ['fruitRegrowTime','Fruit regrow (sec)'],['treeRespawnTime','Tree respawn (sec)'],['stoneRespawnTime','Stone respawn (sec)'],
+    ]},
+    { title: '🏨 Hotel & Guests', key: 'hotel', items: [
+      ['guestPayment','Guest payment (gold)'],['maxGuests','Max guests'],
+      ['guestStayMin','Stay time min (sec)'],['guestStayMax','Stay time max (sec)'],
+      ['guestSpawnMin','Spawn interval min (sec)'],['guestSpawnMax','Spawn interval max (sec)'],
+    ]},
+    { title: '⚔️ Combat Damage', key: 'damage', items: [
+      ['fist','Fist'],['axe','Axe'],['knife','Knife'],['sword','Sword'],['gold_sword','Gold Sword'],['gold_axe','Gold Axe'],
+    ]},
+    { title: '🍗 Food Energy', key: 'foodEnergy', items: [
+      ['apple','Apple'],['sandwich','Sandwich'],['fruit','Fruit'],['human_meat','Human Meat'],
+      ['cooked_food','Cooked Food'],['cooked_human_meat','Cooked Human Meat'],['cooked_apple','Cooked Apple'],['cooked_fruit','Cooked Fruit'],
+    ]},
+    { title: '🔥 Cooking', key: 'cooking', items: [['cookTime','Cook time (sec)']] },
+    { title: '😴 Sleep', key: 'sleep', items: [['normalTime','Normal (sec)'],['upgradedTime','Upgraded (sec)']] },
+    { title: '👤 Humans', key: 'humans', items: [
+      ['maxAlive','Max alive'],['spawnMin','Spawn min (sec)'],['spawnMax','Spawn max (sec)'],['health','Health'],
+    ]},
+  ];
+
+  let html = '<h2>⚙️ Settings</h2>';
+  for (const sec of sections) {
+    html += `<h3>${sec.title}</h3>`;
+    for (const [key, label] of sec.items) {
+      const val = CONFIG[sec.key][key];
+      const step = (typeof val === 'number' && val < 1) ? '0.01' : '1';
+      html += `<div class="setting-row"><label>${label}</label><input type="number" step="${step}" data-section="${sec.key}" data-key="${key}" value="${val}"></div>`;
+    }
+  }
+  html += '<div class="settings-buttons">';
+  html += '<button class="save-settings" id="save-settings-btn">💾 Save</button>';
+  html += '<button class="reset-settings" id="reset-settings-btn">🔄 Reset Defaults</button>';
+  html += '<button id="close-settings-btn">← Back</button>';
+  html += '</div>';
+  content.innerHTML = html;
+
+  document.getElementById('save-settings-btn').addEventListener('click', () => {
+    content.querySelectorAll('input[data-section]').forEach(inp => {
+      const sec = inp.dataset.section, key = inp.dataset.key;
+      CONFIG[sec][key] = parseFloat(inp.value) || 0;
+    });
+    CONFIG.save();
+    screen.classList.add('hidden');
+    document.getElementById('character-select').style.display = 'flex';
+  });
+
+  document.getElementById('reset-settings-btn').addEventListener('click', () => {
+    if (confirm('Reset all settings to defaults?')) {
+      localStorage.removeItem('forest_critters_config');
+      location.reload();
+    }
+  });
+
+  document.getElementById('close-settings-btn').addEventListener('click', () => {
+    screen.classList.add('hidden');
+    document.getElementById('character-select').style.display = 'flex';
+  });
+}
+
+document.getElementById('settings-btn').addEventListener('click', () => {
+  buildSettingsUI();
+  document.getElementById('character-select').style.display = 'none';
+  document.getElementById('settings-screen').classList.remove('hidden');
+});
