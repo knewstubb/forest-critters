@@ -174,12 +174,20 @@ class Player {
     else if (a > Math.PI * 0.75 || a <= -Math.PI * 0.75) this.facing = 'left';
     else this.facing = 'right';
 
-    // Movement — W moves toward mouse cursor
-    if (this.keys['w'] || this.keys['arrowup']) {
+    // Movement — W moves toward mouse cursor, touch joystick also moves
+    const moving = this.keys['w'] || this.keys['arrowup'] ||
+      (typeof Game !== 'undefined' && Game.touchMoving);
+    const movingBack = this.keys['s'] || this.keys['arrowdown'];
+
+    if (typeof Game !== 'undefined' && Game.touchMoving) {
+      this.angle = Game.touchAngle;
+    }
+
+    if (moving) {
       this.x += Math.cos(this.angle) * this.speed * dt * 60;
       this.y += Math.sin(this.angle) * this.speed * dt * 60;
     }
-    if (this.keys['s'] || this.keys['arrowdown']) {
+    if (movingBack) {
       this.x -= Math.cos(this.angle) * this.speed * dt * 60;
       this.y -= Math.sin(this.angle) * this.speed * dt * 60;
     }

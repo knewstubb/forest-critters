@@ -8,12 +8,18 @@ body {
   height: 100vh;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   overflow: hidden;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #game-container {
   position: relative;
   width: 800px;
   height: 600px;
+  max-width: 100vw;
+  max-height: 100vh;
 }
 
 canvas {
@@ -336,3 +342,90 @@ canvas {
 }
 
 #new-game-btn:hover { background: rgba(0,0,0,0.8); border-color: #aaa; }
+
+/* Touch Controls */
+#touch-controls {
+  display: none;
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 160px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+#joystick-zone {
+  position: absolute;
+  bottom: 20px;
+  left: 30px;
+  width: 120px;
+  height: 120px;
+  pointer-events: auto;
+}
+
+#joystick-base {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: 2px solid rgba(255,255,255,0.3);
+  position: relative;
+}
+
+#joystick-thumb {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  position: absolute;
+  top: 35px;
+  left: 35px;
+  transition: none;
+}
+
+.touch-btn {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: 2px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-btn:active {
+  background: rgba(255,255,255,0.35);
+}
+
+#btn-interact {
+  bottom: 30px;
+  right: 30px;
+}
+
+#btn-eat {
+  bottom: 95px;
+  right: 30px;
+}
+
+#btn-inventory {
+  bottom: 30px;
+  right: 100px;
+}
+
+#btn-craft {
+  bottom: 95px;
+  right: 100px;
+}
+
+@media (pointer: coarse), (max-width: 1024px) {
+  #touch-controls { display: block; }
+  #game-container { width: 100vw; height: 100vh; }
+  canvas { width: 100%; height: 100%; border-radius: 0; }
+  #character-select { width: 100vw; height: 100vh; border-radius: 0; }
+  .hud-hint { display: none; }
+}

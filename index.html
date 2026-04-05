@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Forest Critters</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -31,6 +31,17 @@
     <div id="craft-menu" class="hidden"></div>
     <div id="faint-overlay" class="hidden">
       <div class="faint-msg">You fainted! Resting...</div>
+    </div>
+    <div id="touch-controls">
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-thumb"></div>
+        </div>
+      </div>
+      <div class="touch-btn" id="btn-interact">👆</div>
+      <div class="touch-btn" id="btn-eat">🍗</div>
+      <div class="touch-btn" id="btn-inventory">🎒</div>
+      <div class="touch-btn" id="btn-craft">🔨</div>
     </div>
   </div>
   <script src="js/entities.js"></script>

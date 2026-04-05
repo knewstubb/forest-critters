@@ -44,8 +44,7 @@ const Game = {
   start(charType) {
     document.getElementById('character-select').style.display = 'none';
     this.canvas = document.getElementById('gameCanvas');
-    this.canvas.width = 800;
-    this.canvas.height = 600;
+    this.resizeCanvas();
     this.canvas.style.display = 'block';
     this.ctx = this.canvas.getContext('2d');
     const cx = this.worldSize / 2, cy = this.worldSize / 2;
@@ -54,9 +53,22 @@ const Game = {
     UI.showHUD();
     this.generateWorld(cx, cy);
     this.setupInput();
+    window.addEventListener('resize', () => this.resizeCanvas());
     this.running = true;
     this.lastTime = performance.now();
     requestAnimationFrame(t => this.loop(t));
+  },
+
+  resizeCanvas() {
+    const container = document.getElementById('game-container');
+    const isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 1024;
+    if (isMobile) {
+      this.canvas.width = window.innerWidth;
+      this.canvas.height = window.innerHeight;
+    } else {
+      this.canvas.width = 800;
+      this.canvas.height = 600;
+    }
   },
 
   generateWorld(spawnX, spawnY) {
@@ -277,6 +289,127 @@ const Game = {
       }
     });
     this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // ---- TOUCH CONTROLS ----
+    this.touchMoving = false;
+    this.touchAngle = 0;
+
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickThumb = document.getElementById('joystick-thumb');
+    const joystickBase = document.getElementById('joystick-base');
+
+    if (joystickZone) {
+      const getJoystickInput = (touch) => {
+        const rect = joystickBase.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dx = touch.clientX - cx;
+        const dy = touch.clientY - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = 45;
+        const clampDist = Math.min(dist, maxDist);
+        const angle = Math.atan2(dy, dx);
+        joystickThumb.style.left = (35 + Math.cos(angle) * clampDist) + 'px';
+        joystickThumb.style.top = (35 + Math.sin(angle) * clampDist) + 'px';
+        if (dist > 10) {
+          this.touchMoving = true;
+          this.touchAngle = angle;
+          this.player.angle = angle;
+        } else {
+          this.touchMoving = false;
+        }
+      };
+
+      let joystickTouchId = null;
+
+      joystickZone.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        joystickTouchId = touch.identifier;
+        getJoystickInput(touch);
+      });
+
+      joystickZone.addEventListener('touchmove', e => {
+        e.preventDefault();
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === joystickTouchId) {
+            getJoystickInput(touch);
+          }
+        }
+      });
+
+      const resetJoystick = (e) => {
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === joystickTouchId) {
+            joystickTouchId = null;
+            this.touchMoving = false;
+            joystickThumb.style.left = '35px';
+            joystickThumb.style.top = '35px';
+          }
+        }
+      };
+      joystickZone.addEventListener('touchend', resetJoystick);
+      joystickZone.addEventListener('touchcancel', resetJoystick);
+    }
+
+    // Touch buttons
+    const btnInteract = document.getElementById('btn-interact');
+    const btnEat = document.getElementById('btn-eat');
+    const btnInventory = document.getElementById('btn-inventory');
+    const btnCraft = document.getElementById('btn-craft');
+
+    if (btnInteract) btnInteract.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (this.insideHouse) this.interactHouse();
+      else { this.interact(); this.attack(); }
+    });
+    if (btnEat) btnEat.addEventListener('touchstart', e => { e.preventDefault(); this.tryEat(); });
+    if (btnInventory) btnInventory.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (this.insideHouse) UI.toggleTableUI(this);
+      else UI.toggleInventory(this.player);
+    });
+    if (btnCraft) btnCraft.addEventListener('touchstart', e => {
+      e.preventDefault();
+      UI.toggleCraft(this.player, this);
+    });
+
+    // Touch on canvas for placement mode and interaction
+    this.canvas.addEventListener('touchstart', e => {
+      if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen) return;
+      const touch = e.changedTouches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      const mx = (touch.clientX - rect.left) * scaleX;
+      const my = (touch.clientY - rect.top) * scaleY;
+
+      if (this.insideHouse) {
+        this.player.mouseX = mx;
+        this.player.mouseY = my;
+        this.player.angle = Math.atan2(my - (this.player.y + this.player.h/2), mx - (this.player.x + this.player.w/2));
+      } else {
+        this.player.mouseX = mx + this.camera.x;
+        this.player.mouseY = my + this.camera.y;
+        this.player.angle = Math.atan2(this.player.mouseY - (this.player.y + this.player.h/2), this.player.mouseX - (this.player.x + this.player.w/2));
+
+        if (this.placementMode) {
+          const px = this.player.mouseX - 20;
+          const py = this.player.mouseY - 20;
+          const type = this.placementMode.type;
+          if (type === 'house') { this.house = { x: px, y: py }; }
+          else if (type === 'hotel') { this.hotel = { x: px, y: py }; }
+          else if (type === 'pavement') {
+            const gx = Math.round(px / 40) * 40;
+            const gy = Math.round(py / 40) * 40;
+            this.entities.pavements.push(new Pavement(gx, gy));
+          } else if (type === 'fountain' || type === 'statue' || type === 'garden' || type === 'market') {
+            this.entities.decorations.push(new Decoration(px, py, type));
+          }
+          this.placementMode = null;
+        }
+      }
+    });
   },
 
   getNearby(entityList, range) {
@@ -884,7 +1017,7 @@ setInterval(() => {
 Game.loadFromSave = function(data) {
   document.getElementById('character-select').style.display = 'none';
   this.canvas = document.getElementById('gameCanvas');
-  this.canvas.width = 800; this.canvas.height = 600;
+  this.resizeCanvas();
   this.canvas.style.display = 'block';
   document.getElementById('new-game-btn').style.display = 'block';
   this.ctx = this.canvas.getContext('2d');
