@@ -133,17 +133,23 @@ canvas {
 .health-fill { background: #e53935; }
 .hunger-fill { background: #ff9800; }
 
-.hud-hint {
+.hud-hint, #hud-hint-bar {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   background: rgba(0,0,0,0.6);
   border-radius: 8px;
   padding: 6px 14px;
   color: #fff;
   font-size: 13px;
   pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+  display: none;
 }
+
+#hud-hint-bar { display: none; }
 
 /* Inventory Screen */
 #inventory-screen {

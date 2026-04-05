@@ -16,7 +16,11 @@ const UI = {
     this.faintEl = document.getElementById('faint-overlay');
   },
 
-  showHUD() { this.hudEl.style.display = 'block'; },
+  showHUD() {
+    this.hudEl.style.display = 'block';
+    const hintBar = document.getElementById('hud-hint-bar');
+    if (hintBar) hintBar.style.display = 'block';
+  },
 
   updateHUD(player) {
     const hp = Math.max(0,(player.health/player.maxHealth)*100);
@@ -29,8 +33,7 @@ const UI = {
         <div class="hud-stat">🪵 ${player.countItem('wood')} 🪨 ${player.countItem('stone')}</div>
         <div class="hud-stat">🎒 ${player.inventory.filter(s=>s).length}/7</div>
         <div class="hud-stat">🔧 ${eq ? eq.type : 'none'}</div>
-      </div>
-      <div class="hud-hint">[W] Move  [I] Inventory  [C] Craft  Click: Interact  [Q] Eat</div>`;
+      </div>`;
   },
 
   showPrompt(text) {
