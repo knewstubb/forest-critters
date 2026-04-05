@@ -51,6 +51,11 @@ const CONFIG = {
     treeRespawnTime: 30,
     stoneRespawnTime: 30,
   },
+  // Building limits
+  limits: {
+    maxHouses: 5,
+    maxHotels: 5,
+  },
   // Hotel & guests
   hotel: {
     guestPayment: 6,
@@ -106,7 +111,7 @@ const CONFIG = {
     if (!raw) return;
     try {
       const data = JSON.parse(raw);
-      for (const section of ['costs','upgradeCosts','sellPrices','yields','hotel','damage','foodEnergy','cooking','sleep','humans']) {
+      for (const section of ['costs','upgradeCosts','sellPrices','yields','limits','hotel','damage','foodEnergy','cooking','sleep','humans']) {
         if (data[section]) {
           for (const key in data[section]) {
             if (this[section] && this[section].hasOwnProperty(key)) {

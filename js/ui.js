@@ -113,13 +113,13 @@ const UI = {
       { name:'Market', type:'market', res:'gold', cost:CONFIG.costs.market, icon:'🏪' },
     ];
 
-    const upgrades = game && player.houseBuilt ? [
-      { name:'House+ (bigger room)', type:'up_house', res:'wood', cost:CONFIG.upgradeCosts.house, icon:'🏠★', done: game.upgrades.house },
-      { name:'Wardrobe (clothing)', type:'up_wardrobe', res:'wood', cost:CONFIG.upgradeCosts.wardrobe, icon:'👔', done: game.upgrades.wardrobe },
-      { name:'Mirror (change character)', type:'up_mirror', res:'stone', cost:CONFIG.upgradeCosts.mirror, icon:'🪞', done: game.upgrades.mirror },
-      { name:'Fireplace+ (3 slots)', type:'up_fireplace', res:'stone', cost:CONFIG.upgradeCosts.fireplace, icon:'🔥★', done: game.upgrades.fireplace },
-      { name:'Fridge (20 food slots)', type:'up_fridge', res:'stone', cost:CONFIG.upgradeCosts.fridge, icon:'🧊', done: game.upgrades.fridge },
-      { name:'Bed+ (15s sleep)', type:'up_bed', res:'wood', cost:CONFIG.upgradeCosts.bed, icon:'🛏️★', done: game.upgrades.bed },
+    const upgrades = game && game.insideHouse ? [
+      { name:'House+ (bigger room)', type:'up_house', res:'wood', cost:CONFIG.upgradeCosts.house, icon:'🏠★', done: game.currentHouseUpgrades.house },
+      { name:'Wardrobe (clothing)', type:'up_wardrobe', res:'wood', cost:CONFIG.upgradeCosts.wardrobe, icon:'👔', done: game.currentHouseUpgrades.wardrobe },
+      { name:'Mirror (change character)', type:'up_mirror', res:'stone', cost:CONFIG.upgradeCosts.mirror, icon:'🪞', done: game.currentHouseUpgrades.mirror },
+      { name:'Fireplace+ (3 slots)', type:'up_fireplace', res:'stone', cost:CONFIG.upgradeCosts.fireplace, icon:'🔥★', done: game.currentHouseUpgrades.fireplace },
+      { name:'Fridge (20 food slots)', type:'up_fridge', res:'stone', cost:CONFIG.upgradeCosts.fridge, icon:'🧊', done: game.currentHouseUpgrades.fridge },
+      { name:'Bed+ (15s sleep)', type:'up_bed', res:'wood', cost:CONFIG.upgradeCosts.bed, icon:'🛏️★', done: game.currentHouseUpgrades.bed },
       { name:'Axe+ (5 slabs/tree)', type:'up_axe', res:'stone', cost:CONFIG.upgradeCosts.axe, icon:'🪓★', done: game.upgrades.axe },
     ] : [];
 
@@ -135,12 +135,12 @@ const UI = {
 
     let html = '<h2>🔨 Craft</h2>';
     for (const r of recipes) {
-      if (r.type === 'house' && player.houseBuilt) {
-        html += `<div class="craft-item"><span>${r.icon} ${r.name}</span><span style="color:#4caf50">Built!</span></div>`;
+      if (r.type === 'house' && game && game.houses.length >= (CONFIG.limits ? CONFIG.limits.maxHouses : 5)) {
+        html += `<div class="craft-item"><span>${r.icon} ${r.name}</span><span style="color:#4caf50">Max built (${game.houses.length})</span></div>`;
         continue;
       }
-      if (r.type === 'hotel' && game && game.hotel) {
-        html += `<div class="craft-item"><span>${r.icon} ${r.name}</span><span style="color:#4caf50">Built!</span></div>`;
+      if (r.type === 'hotel' && game && game.hotels.length >= (CONFIG.limits ? CONFIG.limits.maxHotels : 5)) {
+        html += `<div class="craft-item"><span>${r.icon} ${r.name}</span><span style="color:#4caf50">Max built (${game.hotels.length})</span></div>`;
         continue;
       }
       const have = r.res === 'wood' ? woodCount : r.res === 'gold' ? goldCount : stoneCount;
@@ -181,10 +181,10 @@ const UI = {
         const have = recipe.res === 'wood' ? player.countItem('wood') : recipe.res === 'gold' ? player.countItem('gold') : player.countItem('stone');
         if (have >= recipe.cost) {
           if (type === 'house') {
-            player.removeItem('wood', 40); player.houseBuilt = true;
+            player.removeItem('wood', recipe.cost);
             if (game) { game.placementMode = { type: 'house' }; UI.closeAll(); }
           } else if (type === 'hotel') {
-            player.removeItem('wood', 9);
+            player.removeItem('wood', recipe.cost);
             if (game) { game.placementMode = { type: 'hotel' }; UI.closeAll(); }
           } else if (type === 'pavement') {
             player.removeItem('stone', 3);

@@ -7,34 +7,14 @@ const Game = {
   worldSize: 2000,
   grassTiles: [],
   flashes: [],
-  house: null,
+  houses: [],        // array of { x, y, interior, upgrades, bedTimer, isSleeping, cookingItems }
   insideHouse: false,
-  houseInterior: {
-    w: 300, h: 250,
-    bed: { x: 10, y: 10, w: 70, h: 50 },
-    table: { x: 210, y: 10, w: 70, h: 50, slots: [null,null,null,null,null,null,null,null,null,null] },
-    fireplace: { x: 115, y: 5, w: 60, h: 40 },
-    door: { x: 130, y: 210, w: 40, h: 40 },
-    // Upgrade furniture (added when upgraded)
-    wardrobe: null, // { x, y, w, h, slots: [] }
-    fridge: null,    // { x, y, w, h, slots: [] }
-    mirror: null,    // { x, y, w, h }
-  },
-  // Upgrades tracking
+  currentHouseIndex: -1, // which house the player is inside
+  // Global upgrades (axe upgrade is global)
   upgrades: {
-    house: false,     // 50 wood — adds wardrobe room
-    wardrobe: false,  // 3 wood — wardrobe with clothing
-    mirror: false,    // 3 gold — change character
-    fireplace: false, // 30 stone — cook 3 at once
-    fridge: false,    // 40 stone — 20 food slots
-    bed: false,       // 50 wood — 15s sleep
     axe: false,       // 45 stone — 5 slabs per tree
   },
-  bedTimer: 0,
-  isSleeping: false,
-  cookingItems: [],  // array of { type, timer } — up to 1 or 3
-  hotel: null,       // { x, y } world position
-  hotelGoldBox: 0,   // gold accumulated from guests
+  hotels: [],        // array of { x, y, goldBox, guestSpawnTimer }
   guestSpawnTimer: 0,
   humanSpawnTimer: 0,
   placementMode: null, // { type } — when set, shows ghost preview for placing
@@ -98,14 +78,6 @@ const Game = {
     this.entities.humans.push(new Human(100+Math.random()*(ws-200), 100+Math.random()*(ws-200)));
   },
 
-  buildHouse() {
-    this.house = { x: this.player.x + 40, y: this.player.y - 20 };
-  },
-
-  buildHotel() {
-    this.hotel = { x: this.player.x + 120, y: this.player.y - 20 };
-  },
-
   placePavement() {
     const p = this.player;
     const offsets = { up: [0,-40], down: [0,40], left: [-40,0], right: [40,0] };
@@ -122,30 +94,72 @@ const Game = {
 
   addFlash(x, y) { this.flashes.push({ x, y, timer: 0.3 }); },
 
-  getMaxCookSlots() { return this.upgrades.fireplace ? 3 : 1; },
-  getSleepTime() { return this.upgrades.bed ? 15 : 20; },
+  createHouseInterior() {
+    return {
+      w: 300, h: 250,
+      bed: { x: 10, y: 10, w: 70, h: 50 },
+      table: { x: 210, y: 10, w: 70, h: 50, slots: [null,null,null,null,null,null,null,null,null,null] },
+      fireplace: { x: 115, y: 5, w: 60, h: 40 },
+      door: { x: 130, y: 210, w: 40, h: 40 },
+      wardrobe: null,
+      fridge: null,
+      mirror: null,
+    };
+  },
+
+  createHouseUpgrades() {
+    return { house: false, wardrobe: false, mirror: false, fireplace: false, fridge: false, bed: false };
+  },
+
+  // Get current house's interior and upgrades
+  get houseInterior() {
+    if (this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex]) {
+      return this.houses[this.currentHouseIndex].interior;
+    }
+    // Fallback for when not inside any house — return first house or a dummy
+    if (this.houses.length > 0) return this.houses[0].interior;
+    return this.createHouseInterior();
+  },
+
+  get currentHouseUpgrades() {
+    if (this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex]) {
+      return this.houses[this.currentHouseIndex].upgrades;
+    }
+    if (this.houses.length > 0) return this.houses[0].upgrades;
+    return this.createHouseUpgrades();
+  },
+
+  get isSleeping() { return this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex] ? this.houses[this.currentHouseIndex].isSleeping : false; },
+  set isSleeping(v) { if (this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex]) this.houses[this.currentHouseIndex].isSleeping = v; },
+  get bedTimer() { return this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex] ? this.houses[this.currentHouseIndex].bedTimer : 0; },
+  set bedTimer(v) { if (this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex]) this.houses[this.currentHouseIndex].bedTimer = v; },
+  get cookingItems() { return this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex] ? this.houses[this.currentHouseIndex].cookingItems : []; },
+  set cookingItems(v) { if (this.currentHouseIndex >= 0 && this.houses[this.currentHouseIndex]) this.houses[this.currentHouseIndex].cookingItems = v; },
+
+  getMaxCookSlots() { return this.currentHouseUpgrades.fireplace ? 3 : 1; },
+  getSleepTime() { return this.currentHouseUpgrades.bed ? 15 : 20; },
   getSlabsPerTree() { return this.upgrades.axe ? 5 : 3; },
 
   applyUpgrade(type) {
     const p = this.player;
     const hi = this.houseInterior;
-    if (type === 'house' && !this.upgrades.house) {
+    const hu = this.currentHouseUpgrades;
+    if (type === 'house' && !hu.house) {
       if (p.countItem('wood') >= 50) {
         p.removeItem('wood', 50);
-        this.upgrades.house = true;
+        hu.house = true;
         hi.w = 450;
         return true;
       }
     }
-    if (type === 'wardrobe' && !this.upgrades.wardrobe) {
+    if (type === 'wardrobe' && !hu.wardrobe) {
       if (p.countItem('wood') >= 3) {
         p.removeItem('wood', 3);
-        this.upgrades.wardrobe = true;
+        hu.wardrobe = true;
         if (!hi.wardrobe) {
           hi.wardrobe = { x: 320, y: 10, w: 70, h: 60, slots: new Array(40).fill(null) };
           if (hi.w < 450) hi.w = 450;
         }
-        // Pre-stock with clothing
         const clothing = [
           'top_hat','cowboy_hat','crown','beret','beanie',
           'red_dress','blue_dress','green_dress','pink_dress','yellow_dress',
@@ -159,33 +173,33 @@ const Game = {
         return true;
       }
     }
-    if (type === 'mirror' && !this.upgrades.mirror) {
+    if (type === 'mirror' && !hu.mirror) {
       if (p.countItem('stone') >= 3) {
         p.removeItem('stone', 3);
-        this.upgrades.mirror = true;
+        hu.mirror = true;
         hi.mirror = { x: 10, y: 70, w: 40, h: 50 };
         return true;
       }
     }
-    if (type === 'fireplace' && !this.upgrades.fireplace) {
+    if (type === 'fireplace' && !hu.fireplace) {
       if (p.countItem('stone') >= 30) {
         p.removeItem('stone', 30);
-        this.upgrades.fireplace = true;
+        hu.fireplace = true;
         return true;
       }
     }
-    if (type === 'fridge' && !this.upgrades.fridge) {
+    if (type === 'fridge' && !hu.fridge) {
       if (p.countItem('stone') >= 40) {
         p.removeItem('stone', 40);
-        this.upgrades.fridge = true;
+        hu.fridge = true;
         hi.fridge = { x: 10, y: 130, w: 60, h: 55, slots: new Array(20).fill(null) };
         return true;
       }
     }
-    if (type === 'bed' && !this.upgrades.bed) {
+    if (type === 'bed' && !hu.bed) {
       if (p.countItem('wood') >= 50) {
         p.removeItem('wood', 50);
-        this.upgrades.bed = true;
+        hu.bed = true;
         return true;
       }
     }
@@ -199,19 +213,22 @@ const Game = {
     return false;
   },
 
-  enterHouse() {
+  enterHouse(houseIndex) {
     this.insideHouse = true;
-    this.isSleeping = false;
-    this.bedTimer = 0;
+    this.currentHouseIndex = houseIndex;
+    this.houses[houseIndex].isSleeping = false;
+    this.houses[houseIndex].bedTimer = 0;
     this.player.x = 380; this.player.y = 420;
   },
 
   exitHouse() {
+    const house = this.houses[this.currentHouseIndex];
     this.insideHouse = false;
-    this.isSleeping = false;
-    this.bedTimer = 0;
-    this.player.x = this.house.x + 30;
-    this.player.y = this.house.y + 65;
+    house.isSleeping = false;
+    house.bedTimer = 0;
+    this.player.x = house.x + 30;
+    this.player.y = house.y + 65;
+    this.currentHouseIndex = -1;
   },
 
   getInteriorOrigin() {
@@ -266,9 +283,9 @@ const Game = {
           const py = this.player.mouseY - 20;
           const type = this.placementMode.type;
           if (type === 'house') {
-            this.house = { x: px, y: py };
+            this.houses.push({ x: px, y: py, interior: this.createHouseInterior(), upgrades: this.createHouseUpgrades(), bedTimer: 0, isSleeping: false, cookingItems: [] });
           } else if (type === 'hotel') {
-            this.hotel = { x: px, y: py };
+            this.hotels.push({ x: px, y: py, goldBox: 0, guestSpawnTimer: 0 });
           } else if (type === 'pavement') {
             // Snap to grid
             const gx = Math.round(px / 40) * 40;
@@ -397,8 +414,8 @@ const Game = {
           const px = this.player.mouseX - 20;
           const py = this.player.mouseY - 20;
           const type = this.placementMode.type;
-          if (type === 'house') { this.house = { x: px, y: py }; }
-          else if (type === 'hotel') { this.hotel = { x: px, y: py }; }
+          if (type === 'house') { this.houses.push({ x: px, y: py, interior: this.createHouseInterior(), upgrades: this.createHouseUpgrades(), bedTimer: 0, isSleeping: false, cookingItems: [] }); }
+          else if (type === 'hotel') { this.hotels.push({ x: px, y: py, goldBox: 0, guestSpawnTimer: 0 }); }
           else if (type === 'pavement') {
             const gx = Math.round(px / 40) * 40;
             const gy = Math.round(py / 40) * 40;
@@ -451,19 +468,22 @@ const Game = {
     if (this.player.fainted) return;
     const p = this.player, eq = p.getEquipped();
 
-    if (this.house) {
-      const dx = (p.x+p.w/2)-(this.house.x+30), dy = (p.y+p.h/2)-(this.house.y+50);
-      if (Math.sqrt(dx*dx+dy*dy) < 40) { this.enterHouse(); return; }
+    // Check all houses for entry
+    for (let i = 0; i < this.houses.length; i++) {
+      const house = this.houses[i];
+      const dx = (p.x+p.w/2)-(house.x+30), dy = (p.y+p.h/2)-(house.y+50);
+      if (Math.sqrt(dx*dx+dy*dy) < 40) { this.enterHouse(i); return; }
     }
 
-    // Collect gold from hotel box
-    if (this.hotel && this.hotelGoldBox > 0) {
-      const dx = (p.x+p.w/2)-(this.hotel.x+40), dy = (p.y+p.h/2)-(this.hotel.y+40);
-      if (Math.sqrt(dx*dx+dy*dy) < 50) {
-        const amount = this.hotelGoldBox;
-        p.addItem('gold', amount);
-        this.hotelGoldBox = 0;
-        return;
+    // Collect gold from hotel boxes
+    for (const hotel of this.hotels) {
+      if (hotel.goldBox > 0) {
+        const dx = (p.x+p.w/2)-(hotel.x+40), dy = (p.y+p.h/2)-(hotel.y+40);
+        if (Math.sqrt(dx*dx+dy*dy) < 50) {
+          p.addItem('gold', hotel.goldBox);
+          hotel.goldBox = 0;
+          return;
+        }
       }
     }
 
@@ -576,11 +596,14 @@ const Game = {
 
     for (const h of this.entities.humans) {
       h.update(dt, p);
-      if (this.house && h.alive) {
-        const hx = this.house.x, hy = this.house.y;
-        if (h.x > hx-10 && h.x < hx+70 && h.y > hy-10 && h.y < hy+70) {
-          const cx = hx+30, cy = hy+30, ang = Math.atan2(h.y-cy, h.x-cx);
-          h.x = cx+Math.cos(ang)*50; h.y = cy+Math.sin(ang)*50; h.aggro = false;
+      // Push humans away from all houses
+      for (const house of this.houses) {
+        if (h.alive) {
+          const hx = house.x, hy = house.y;
+          if (h.x > hx-10 && h.x < hx+70 && h.y > hy-10 && h.y < hy+70) {
+            const cx = hx+30, cy = hy+30, ang = Math.atan2(h.y-cy, h.x-cx);
+            h.x = cx+Math.cos(ang)*50; h.y = cy+Math.sin(ang)*50; h.aggro = false;
+          }
         }
       }
     }
@@ -610,28 +633,35 @@ const Game = {
       }
     }
 
-    // Update guests
+    // Update guests — pay to nearest hotel
     for (const g of this.entities.guests) {
       g.update(dt);
       if (g.paid && g.alive) {
-        this.hotelGoldBox += 6;
-        g.paid = false; // only pay once
+        // Find the hotel this guest belongs to
+        for (const hotel of this.hotels) {
+          if (hotel.x === g.hotelX && hotel.y === g.hotelY) {
+            hotel.goldBox += 6;
+            break;
+          }
+        }
+        g.paid = false;
       }
     }
     // Remove dead guests
     this.entities.guests = this.entities.guests.filter(g => g.alive);
 
-    // Spawn guests if hotel exists
-    if (this.hotel) {
-      this.guestSpawnTimer -= dt;
-      if (this.guestSpawnTimer <= 0) {
-        if (this.entities.guests.length < 3) {
+    // Spawn guests for each hotel
+    for (const hotel of this.hotels) {
+      hotel.guestSpawnTimer -= dt;
+      if (hotel.guestSpawnTimer <= 0) {
+        const hotelGuests = this.entities.guests.filter(g => g.hotelX === hotel.x && g.hotelY === hotel.y);
+        if (hotelGuests.length < 3) {
           const side = Math.random() > 0.5 ? 1 : -1;
-          const gx = this.hotel.x + side * (150 + Math.random() * 100);
-          const gy = this.hotel.y + (Math.random() - 0.5) * 100;
-          this.entities.guests.push(new Guest(gx, gy, this.hotel.x, this.hotel.y));
+          const gx = hotel.x + side * (150 + Math.random() * 100);
+          const gy = hotel.y + (Math.random() - 0.5) * 100;
+          this.entities.guests.push(new Guest(gx, gy, hotel.x, hotel.y));
         }
-        this.guestSpawnTimer = 20 + Math.random() * 25;
+        hotel.guestSpawnTimer = 20 + Math.random() * 25;
       }
     }
 
@@ -703,14 +733,16 @@ const Game = {
       UI.showPrompt(`Placing ${this.placementMode.type} — click to place, right-click to cancel`);
       return;
     }
-    if (this.house) {
-      const dx = (p.x+p.w/2)-(this.house.x+30), dy = (p.y+p.h/2)-(this.house.y+50);
+    // Check all houses for prompt
+    for (const house of this.houses) {
+      const dx = (p.x+p.w/2)-(house.x+30), dy = (p.y+p.h/2)-(house.y+50);
       if (Math.sqrt(dx*dx+dy*dy) < 40) { UI.showPrompt('Click to enter house'); return; }
     }
-    if (this.hotel) {
-      const dx = (p.x+p.w/2)-(this.hotel.x+40), dy = (p.y+p.h/2)-(this.hotel.y+40);
+    // Check all hotels for prompt
+    for (const hotel of this.hotels) {
+      const dx = (p.x+p.w/2)-(hotel.x+40), dy = (p.y+p.h/2)-(hotel.y+40);
       if (Math.sqrt(dx*dx+dy*dy) < 50) {
-        if (this.hotelGoldBox > 0) UI.showPrompt(`Click to collect ${this.hotelGoldBox} gold from hotel`);
+        if (hotel.goldBox > 0) UI.showPrompt(`Click to collect ${hotel.goldBox} gold from hotel`);
         else UI.showPrompt('Hotel — no gold to collect');
         return;
       }
@@ -762,10 +794,11 @@ const Game = {
     // Draw decorations
     for (const dec of this.entities.decorations) drawList.push(dec);
 
-    if (this.house) {
-      drawList.push({ y: this.house.y, h: 60, draw: (ctx, cam) => {
-        const sx = this.house.x-cam.x, sy = this.house.y-cam.y;
-        const w = this.upgrades.house ? 90 : 60;
+    for (const house of this.houses) {
+      const houseUpgrades = house.upgrades;
+      drawList.push({ y: house.y, h: 60, draw: (ctx, cam) => {
+        const sx = house.x-cam.x, sy = house.y-cam.y;
+        const w = houseUpgrades.house ? 90 : 60;
         ctx.fillStyle = '#8d6e63'; ctx.fillRect(sx, sy+15, w, 45);
         ctx.fillStyle = '#d32f2f';
         ctx.beginPath(); ctx.moveTo(sx-5, sy+15); ctx.lineTo(sx+w/2, sy-10); ctx.lineTo(sx+w+5, sy+15); ctx.closePath(); ctx.fill();
@@ -774,29 +807,22 @@ const Game = {
       }});
     }
 
-    if (this.hotel) {
-      drawList.push({ y: this.hotel.y, h: 70, draw: (ctx, cam) => {
-        const sx = this.hotel.x-cam.x, sy = this.hotel.y-cam.y;
-        // Hotel building — bigger than house
+    for (const hotel of this.hotels) {
+      drawList.push({ y: hotel.y, h: 70, draw: (ctx, cam) => {
+        const sx = hotel.x-cam.x, sy = hotel.y-cam.y;
         ctx.fillStyle = '#78909c'; ctx.fillRect(sx, sy+10, 80, 55);
-        // Second floor
         ctx.fillStyle = '#607d8b'; ctx.fillRect(sx+5, sy-15, 70, 28);
-        // Roof
         ctx.fillStyle = '#455a64';
         ctx.beginPath(); ctx.moveTo(sx, sy-15); ctx.lineTo(sx+40, sy-35); ctx.lineTo(sx+80, sy-15); ctx.closePath(); ctx.fill();
-        // Door
         ctx.fillStyle = '#5d4037'; ctx.fillRect(sx+32, sy+40, 16, 25);
-        // Windows
         ctx.fillStyle = '#fff9c4';
         ctx.fillRect(sx+8, sy+18, 14, 12); ctx.fillRect(sx+58, sy+18, 14, 12);
         ctx.fillRect(sx+15, sy-8, 12, 10); ctx.fillRect(sx+53, sy-8, 12, 10);
-        // Sign
         ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif';
         ctx.fillText('HOTEL', sx+22, sy+8);
-        // Gold indicator
-        if (this.hotelGoldBox > 0) {
+        if (hotel.goldBox > 0) {
           ctx.fillStyle = '#ffeb3b'; ctx.font = '11px sans-serif';
-          ctx.fillText('✨' + this.hotelGoldBox, sx+28, sy+70);
+          ctx.fillText('✨' + hotel.goldBox, sx+28, sy+70);
         }
       }});
     }
@@ -873,11 +899,11 @@ const Game = {
     // Bed
     const bx = o.x+hi.bed.x, by = o.y+hi.bed.y;
     ctx.fillStyle = '#5d4037'; ctx.fillRect(bx, by, hi.bed.w, hi.bed.h);
-    ctx.fillStyle = this.upgrades.bed ? '#bbdefb' : '#e8f5e9';
+    ctx.fillStyle = this.currentHouseUpgrades.bed ? '#bbdefb' : '#e8f5e9';
     ctx.fillRect(bx+3, by+3, hi.bed.w-6, hi.bed.h-6);
     ctx.fillStyle = '#c8e6c9'; ctx.fillRect(bx+3, by+3, 20, hi.bed.h-6);
     ctx.font = '11px sans-serif'; ctx.fillStyle = '#555';
-    ctx.fillText(this.upgrades.bed ? '🛏️ Bed ★' : '🛏️ Bed', bx+10, by+hi.bed.h+13);
+    ctx.fillText(this.currentHouseUpgrades.bed ? '🛏️ Bed ★' : '🛏️ Bed', bx+10, by+hi.bed.h+13);
     if (this.isSleeping) {
       ctx.fillStyle = 'rgba(0,0,100,0.3)'; ctx.fillRect(bx, by, hi.bed.w, hi.bed.h);
       ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif'; ctx.fillText('💤', bx+30, by+20);
@@ -913,7 +939,7 @@ const Game = {
       ctx.fillStyle = '#ff9800'; ctx.fillRect(fx, fy+hi.fireplace.h+20, hi.fireplace.w*(1-worst/3), 5);
     }
     ctx.font = '11px sans-serif'; ctx.fillStyle = '#555';
-    ctx.fillText(this.upgrades.fireplace ? '🔥 Fire ★' : '🔥 Fire', fx+8, fy+hi.fireplace.h+34);
+    ctx.fillText(this.currentHouseUpgrades.fireplace ? '🔥 Fire ★' : '🔥 Fire', fx+8, fy+hi.fireplace.h+34);
 
     // Fridge (if built)
     if (hi.fridge) {
@@ -977,14 +1003,22 @@ const SaveSystem = {
       equippedSlot: p.equippedSlot,
       totalWoodCollected: p.totalWoodCollected,
       houseBuilt: p.houseBuilt,
-      house: game.house,
+      houses: game.houses.map(h => ({
+        x: h.x, y: h.y,
+        interior: {
+          w: h.interior.w,
+          tableSlots: h.interior.table.slots,
+          fridgeSlots: h.interior.fridge ? h.interior.fridge.slots : null,
+          wardrobeSlots: h.interior.wardrobe ? h.interior.wardrobe.slots : null,
+          hasMirror: !!h.interior.mirror,
+        },
+        upgrades: h.upgrades,
+        cookingItems: [],
+      })),
       upgrades: game.upgrades,
       insideHouse: game.insideHouse,
-      tableSlots: game.houseInterior.table.slots,
-      fridgeSlots: game.houseInterior.fridge ? game.houseInterior.fridge.slots : null,
-      wardrobeSlots: game.houseInterior.wardrobe ? game.houseInterior.wardrobe.slots : null,
+      currentHouseIndex: game.currentHouseIndex,
       outfit: p.outfit,
-      houseW: game.houseInterior.w,
       trees: game.entities.trees.map(t => ({ x:t.x, y:t.y, slabs:t.slabs, alive:t.alive })),
       stones: game.entities.stones.map(s => ({ x:s.x, y:s.y, hits:s.hits, alive:s.alive, hasGold:s.hasGold })),
       dirtPatches: game.entities.dirtPatches.map(d => ({ x:d.x, y:d.y, dug:d.dug, hasGold:d.hasGold })),
@@ -992,8 +1026,7 @@ const SaveSystem = {
       groundItems: game.entities.groundItems.filter(gi => gi.alive).map(gi => ({ x:gi.x, y:gi.y, type:gi.type })),
       pavements: game.entities.pavements.map(pv => ({ x:pv.x, y:pv.y })),
       decorations: game.entities.decorations.map(d => ({ x:d.x, y:d.y, type:d.type })),
-      hotel: game.hotel,
-      hotelGoldBox: game.hotelGoldBox,
+      hotels: game.hotels.map(h => ({ x: h.x, y: h.y, goldBox: h.goldBox })),
     };
     localStorage.setItem(this.SAVE_KEY, JSON.stringify(data));
   },
@@ -1030,24 +1063,45 @@ Game.loadFromSave = function(data) {
   this.player.totalWoodCollected = data.totalWoodCollected;
   this.player.houseBuilt = data.houseBuilt;
 
-  this.house = data.house;
-  this.upgrades = data.upgrades;
-  this.insideHouse = data.insideHouse || false;
-  this.houseInterior.table.slots = data.tableSlots;
-  this.houseInterior.w = data.houseW || 300;
+  // Load houses array (with backward compat for old single-house saves)
+  if (data.houses) {
+    this.houses = data.houses.map(h => {
+      const interior = this.createHouseInterior();
+      interior.w = h.interior.w || 300;
+      interior.table.slots = h.interior.tableSlots || [null,null,null,null,null,null,null,null,null,null];
+      if (h.upgrades.fridge && h.interior.fridgeSlots) {
+        interior.fridge = { x:10, y:130, w:60, h:55, slots: h.interior.fridgeSlots };
+      }
+      if ((h.upgrades.house || h.upgrades.wardrobe) && h.interior.wardrobeSlots !== undefined) {
+        interior.wardrobe = { x:320, y:10, w:70, h:60, slots: h.interior.wardrobeSlots || new Array(40).fill(null) };
+      }
+      if (h.upgrades.mirror) {
+        interior.mirror = { x:10, y:70, w:40, h:50 };
+      }
+      return { x: h.x, y: h.y, interior, upgrades: h.upgrades, bedTimer: 0, isSleeping: false, cookingItems: [] };
+    });
+  } else if (data.house) {
+    // Backward compat: old single-house save
+    const interior = this.createHouseInterior();
+    interior.w = data.houseW || 300;
+    interior.table.slots = data.tableSlots || [null,null,null,null,null,null,null,null,null,null];
+    const oldUpgrades = { house: data.upgrades.house || false, wardrobe: data.upgrades.wardrobe || false, mirror: data.upgrades.mirror || false, fireplace: data.upgrades.fireplace || false, fridge: data.upgrades.fridge || false, bed: data.upgrades.bed || false };
+    if (oldUpgrades.fridge && data.fridgeSlots) {
+      interior.fridge = { x:10, y:130, w:60, h:55, slots: data.fridgeSlots };
+    }
+    if ((oldUpgrades.house || oldUpgrades.wardrobe) && data.wardrobeSlots !== undefined) {
+      interior.wardrobe = { x:320, y:10, w:70, h:60, slots: data.wardrobeSlots || new Array(40).fill(null) };
+    }
+    if (oldUpgrades.mirror) {
+      interior.mirror = { x:10, y:70, w:40, h:50 };
+    }
+    this.houses = [{ x: data.house.x, y: data.house.y, interior, upgrades: oldUpgrades, bedTimer: 0, isSleeping: false, cookingItems: [] }];
+  }
 
-  if (data.upgrades.fridge && data.fridgeSlots) {
-    this.houseInterior.fridge = { x:10, y:130, w:60, h:55, slots: data.fridgeSlots };
-  }
-  if (data.upgrades.house && data.wardrobeSlots !== undefined) {
-    this.houseInterior.wardrobe = { x:320, y:10, w:70, h:60, slots: data.wardrobeSlots || new Array(40).fill(null) };
-  }
-  if (data.upgrades.wardrobe && !this.houseInterior.wardrobe) {
-    this.houseInterior.wardrobe = { x:320, y:10, w:70, h:60, slots: data.wardrobeSlots || new Array(40).fill(null) };
-  }
-  if (data.upgrades.mirror) {
-    this.houseInterior.mirror = { x:10, y:70, w:40, h:50 };
-  }
+  this.upgrades = { axe: data.upgrades.axe || false };
+  this.insideHouse = data.insideHouse || false;
+  this.currentHouseIndex = data.currentHouseIndex >= 0 ? data.currentHouseIndex : (this.insideHouse ? 0 : -1);
+
   if (data.outfit) this.player.outfit = data.outfit;
 
   // Rebuild world from save
@@ -1066,8 +1120,12 @@ Game.loadFromSave = function(data) {
   this.entities.groundItems = data.groundItems.map(gi => new GroundItem(gi.x, gi.y, gi.type));
   this.entities.pavements = (data.pavements || []).map(pv => new Pavement(pv.x, pv.y));
   this.entities.decorations = (data.decorations || []).map(d => new Decoration(d.x, d.y, d.type));
-  this.hotel = data.hotel || null;
-  this.hotelGoldBox = data.hotelGoldBox || 0;
+  // Load hotels array (with backward compat)
+  if (data.hotels) {
+    this.hotels = data.hotels.map(h => ({ x: h.x, y: h.y, goldBox: h.goldBox || 0, guestSpawnTimer: 0 }));
+  } else if (data.hotel) {
+    this.hotels = [{ x: data.hotel.x, y: data.hotel.y, goldBox: data.hotelGoldBox || 0, guestSpawnTimer: 0 }];
+  }
   for (let i = 0; i < 4; i++) this.spawnHuman();
 
   UI.init(); UI.showHUD();
@@ -1172,6 +1230,9 @@ function buildSettingsUI() {
     { title: '😴 Sleep', key: 'sleep', items: [['normalTime','Normal (sec)'],['upgradedTime','Upgraded (sec)']] },
     { title: '👤 Humans', key: 'humans', items: [
       ['maxAlive','Max alive'],['spawnMin','Spawn min (sec)'],['spawnMax','Spawn max (sec)'],['health','Health'],
+    ]},
+    { title: '🏗️ Building Limits', key: 'limits', items: [
+      ['maxHouses','Max houses'],['maxHotels','Max hotels'],
     ]},
   ];
 

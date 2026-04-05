@@ -85,15 +85,17 @@ class Player {
         }
       }
     }
-    // Then remove from table storage if needed
-    if (remaining > 0 && typeof Game !== 'undefined' && Game.houseInterior && Game.houseInterior.table) {
-      const slots = Game.houseInterior.table.slots;
-      for (let i = slots.length - 1; i >= 0 && remaining > 0; i--) {
-        if (slots[i] && slots[i].type === type) {
-          const remove = Math.min(slots[i].count, remaining);
-          slots[i].count -= remove;
-          remaining -= remove;
-          if (slots[i].count <= 0) slots[i] = null;
+    // Then remove from table storage in all houses if needed
+    if (remaining > 0 && typeof Game !== 'undefined' && Game.houses) {
+      for (const house of Game.houses) {
+        const slots = house.interior.table.slots;
+        for (let i = slots.length - 1; i >= 0 && remaining > 0; i--) {
+          if (slots[i] && slots[i].type === type) {
+            const remove = Math.min(slots[i].count, remaining);
+            slots[i].count -= remove;
+            remaining -= remove;
+            if (slots[i].count <= 0) slots[i] = null;
+          }
         }
       }
     }
@@ -105,10 +107,12 @@ class Player {
     for (const slot of this.inventory) {
       if (slot && slot.type === type) total += slot.count;
     }
-    // Also count from table storage
-    if (typeof Game !== 'undefined' && Game.houseInterior && Game.houseInterior.table) {
-      for (const slot of Game.houseInterior.table.slots) {
-        if (slot && slot.type === type) total += slot.count;
+    // Also count from table storage in all houses
+    if (typeof Game !== 'undefined' && Game.houses) {
+      for (const house of Game.houses) {
+        for (const slot of house.interior.table.slots) {
+          if (slot && slot.type === type) total += slot.count;
+        }
       }
     }
     return total;
