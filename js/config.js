@@ -12,7 +12,7 @@ const CONFIG = {
     gold_pickaxe: 8,
     gold_armor: 12,
     house: 40,
-    pavement: 3,
+    pavement: 1,
     hotel: 9,
     fountain: 10,
     statue: 15,

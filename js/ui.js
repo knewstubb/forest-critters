@@ -105,7 +105,7 @@ const UI = {
       { name:'Gold Pickaxe', type:'gold_pickaxe', res:'gold', cost:CONFIG.costs.gold_pickaxe, icon:'⛏️' },
       { name:'Gold Armor', type:'gold_armor', res:'gold', cost:CONFIG.costs.gold_armor, icon:'🛡️' },
       { name:'House', type:'house', res:'wood', cost:CONFIG.costs.house, icon:'🏠' },
-      { name:'Pavement', type:'pavement', res:'stone', cost:CONFIG.costs.pavement, icon:'🧱' },
+      { name:'Pavement', type:'pavement', res:'wood', cost:CONFIG.costs.pavement, icon:'🧱' },
       { name:'Hotel', type:'hotel', res:'wood', cost:CONFIG.costs.hotel, icon:'🏨' },
       { name:'Fountain', type:'fountain', res:'gold', cost:CONFIG.costs.fountain, icon:'⛲' },
       { name:'Statue', type:'statue', res:'gold', cost:CONFIG.costs.statue, icon:'🗿' },
@@ -187,7 +187,7 @@ const UI = {
             player.removeItem('wood', recipe.cost);
             if (game) { game.placementMode = { type: 'hotel' }; UI.closeAll(); }
           } else if (type === 'pavement') {
-            player.removeItem('stone', 3);
+            player.removeItem(recipe.res, recipe.cost);
             if (game) { game.placementMode = { type: 'pavement' }; UI.closeAll(); }
           } else if (type === 'fountain' || type === 'statue' || type === 'garden' || type === 'market') {
             player.removeItem(recipe.res, recipe.cost);
