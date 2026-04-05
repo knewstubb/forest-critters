@@ -3,7 +3,7 @@ const Game = {
   ctx: null,
   player: null,
   camera: { x: 0, y: 0 },
-  entities: { trees: [], stones: [], dirtPatches: [], groundItems: [], humans: [], fruitTrees: [], pavements: [], guests: [], decorations: [] },
+  entities: { trees: [], stones: [], dirtPatches: [], groundItems: [], humans: [], fruitTrees: [], pavements: [], guests: [], decorations: [], villagers: [] },
   worldSize: 2000,
   grassTiles: [],
   flashes: [],
@@ -97,6 +97,17 @@ const Game = {
   },
 
   addFlash(x, y) { this.flashes.push({ x, y, timer: 0.3 }); },
+
+  spawnVillagerForHouse(houseIndex) {
+    if (this.entities.villagers.length >= 10) return; // max 10 villagers
+    // Don't spawn for the very first house (player's house) unless there are already houses
+    const types = ['unicorn', 'otter', 'tiger', 'sloth', 'turtle', 'cheetah'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const house = this.houses[houseIndex];
+    const vx = house.x + 30 + (Math.random() - 0.5) * 60;
+    const vy = house.y + 70 + Math.random() * 40;
+    this.entities.villagers.push(new Villager(vx, vy, type, houseIndex));
+  },
 
   createHouseInterior() {
     return {
@@ -332,6 +343,7 @@ const Game = {
           const type = this.placementMode.type;
           if (type === 'house') {
             this.houses.push({ x: px, y: py, interior: this.createHouseInterior(), upgrades: this.createHouseUpgrades(), bedTimer: 0, isSleeping: false, cookingItems: [] });
+            if (this.houses.length > 1) this.spawnVillagerForHouse(this.houses.length - 1);
           } else if (type === 'hotel') {
             this.hotels.push({ x: px, y: py, goldBox: 0, guestSpawnTimer: 0 });
           } else if (type === 'pavement') {
@@ -462,7 +474,7 @@ const Game = {
           const px = this.player.mouseX - 20;
           const py = this.player.mouseY - 20;
           const type = this.placementMode.type;
-          if (type === 'house') { this.houses.push({ x: px, y: py, interior: this.createHouseInterior(), upgrades: this.createHouseUpgrades(), bedTimer: 0, isSleeping: false, cookingItems: [] }); }
+          if (type === 'house') { this.houses.push({ x: px, y: py, interior: this.createHouseInterior(), upgrades: this.createHouseUpgrades(), bedTimer: 0, isSleeping: false, cookingItems: [] }); if (this.houses.length > 1) this.spawnVillagerForHouse(this.houses.length - 1); }
           else if (type === 'hotel') { this.hotels.push({ x: px, y: py, goldBox: 0, guestSpawnTimer: 0 }); }
           else if (type === 'pavement') {
             const gx = Math.round(px / 40) * 40;
@@ -762,6 +774,23 @@ const Game = {
       this.humanSpawnTimer = 10+Math.random()*15;
     }
 
+    // Update villagers
+    for (const v of this.entities.villagers) {
+      v.update(dt);
+      // Keep villagers in world bounds
+      v.x = Math.max(10, Math.min(this.worldSize - 30, v.x));
+      v.y = Math.max(10, Math.min(this.worldSize - 30, v.y));
+      // Push villagers away from houses (don't walk through them)
+      for (const house of this.houses) {
+        if (v.x > house.x - 5 && v.x < house.x + 65 && v.y > house.y && v.y < house.y + 60) {
+          const cx = house.x + 30, cy = house.y + 30;
+          const ang = Math.atan2(v.y - cy, v.x - cx);
+          v.x = cx + Math.cos(ang) * 45;
+          v.y = cy + Math.sin(ang) * 45;
+        }
+      }
+    }
+
     if (p.fainted) UI.showFaint(); else UI.hideFaint();
     for (let i = this.flashes.length-1; i >= 0; i--) {
       this.flashes[i].timer -= dt;
@@ -926,6 +955,7 @@ const Game = {
     for (const gi of this.entities.groundItems) if (gi.alive) drawList.push(gi);
     for (const h of this.entities.humans) if (h.alive) drawList.push(h);
     for (const g of this.entities.guests) if (g.alive) drawList.push(g);
+    for (const v of this.entities.villagers) if (v.alive) drawList.push(v);
     drawList.push(this.player);
 
     // Draw pavements (below entities)
@@ -1325,6 +1355,7 @@ const SaveSystem = {
       pavements: game.entities.pavements.map(pv => ({ x:pv.x, y:pv.y })),
       decorations: game.entities.decorations.map(d => ({ x:d.x, y:d.y, type:d.type })),
       hotels: game.hotels.map(h => ({ x: h.x, y: h.y, goldBox: h.goldBox })),
+      villagers: game.entities.villagers.filter(v => v.alive).map(v => ({ x: v.x, y: v.y, type: v.type, houseIndex: v.houseIndex, homeX: v.homeX, homeY: v.homeY })),
     };
     localStorage.setItem(this.SAVE_KEY, JSON.stringify(data));
   },
@@ -1420,6 +1451,10 @@ Game.loadFromSave = function(data) {
   this.entities.groundItems = data.groundItems.map(gi => new GroundItem(gi.x, gi.y, gi.type));
   this.entities.pavements = (data.pavements || []).map(pv => new Pavement(pv.x, pv.y));
   this.entities.decorations = (data.decorations || []).map(d => new Decoration(d.x, d.y, d.type));
+  // Load villagers
+  if (data.villagers) {
+    this.entities.villagers = data.villagers.map(v => { const vl = new Villager(v.x, v.y, v.type, v.houseIndex); vl.homeX = v.homeX; vl.homeY = v.homeY; return vl; });
+  }
   // Load hotels array (with backward compat)
   if (data.hotels) {
     this.hotels = data.hotels.map(h => ({ x: h.x, y: h.y, goldBox: h.goldBox || 0, guestSpawnTimer: 0 }));

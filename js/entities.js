@@ -443,3 +443,107 @@ class Decoration {
 
   getBounds() { return { x: this.x, y: this.y, w: this.w, h: this.h }; }
 }
+
+class Villager {
+  constructor(x, y, type, houseIndex) {
+    this.x = x;
+    this.y = y;
+    this.w = 26;
+    this.h = 30;
+    this.type = type; // unicorn, otter, tiger, sloth, turtle, cheetah
+    this.houseIndex = houseIndex;
+    this.homeX = x;
+    this.homeY = y;
+    this.speed = type === 'cheetah' ? 1.4 : type === 'turtle' ? 0.5 : 0.7 + Math.random() * 0.4;
+    this.dir = Math.random() * Math.PI * 2;
+    this.dirTimer = 0;
+    this.alive = true;
+  }
+
+  update(dt) {
+    if (!this.alive) return;
+    this.dirTimer -= dt;
+    if (this.dirTimer <= 0) {
+      // Wander near home — pick a direction back toward home if too far
+      const dx = this.homeX - this.x, dy = this.homeY - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 120) {
+        this.dir = Math.atan2(dy, dx) + (Math.random() - 0.5) * 1;
+      } else {
+        this.dir = Math.random() * Math.PI * 2;
+      }
+      this.dirTimer = 2 + Math.random() * 4;
+    }
+    this.x += Math.cos(this.dir) * this.speed * dt * 60;
+    this.y += Math.sin(this.dir) * this.speed * dt * 60;
+  }
+
+  draw(ctx, cam) {
+    if (!this.alive) return;
+    const sx = this.x - cam.x, sy = this.y - cam.y;
+    const colors = {
+      turtle:  { body: '#2e7d32', head: '#66bb6a' },
+      sloth:   { body: '#8d6e63', head: '#a1887f' },
+      otter:   { body: '#5d4037', head: '#795548' },
+      tiger:   { body: '#ef6c00', head: '#ef6c00' },
+      unicorn: { body: '#e8eaf6', head: '#e8eaf6' },
+      cheetah: { body: '#ffb300', head: '#ffb300' },
+    };
+    const c = colors[this.type] || colors.turtle;
+
+    // Body
+    ctx.fillStyle = c.body;
+    ctx.beginPath();
+    ctx.ellipse(sx + 13, sy + 18, 11, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Belly
+    ctx.fillStyle = this.type === 'cheetah' ? '#ffe082' : this.type === 'tiger' ? '#ffcc80' : this.type === 'unicorn' ? '#f3e5f5' : c.head;
+    ctx.beginPath();
+    ctx.ellipse(sx + 13, sy + 20, 7, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tiger stripes
+    if (this.type === 'tiger') {
+      ctx.strokeStyle = '#e65100'; ctx.lineWidth = 1.2;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(sx + 4, sy + 12 + i * 5); ctx.lineTo(sx + 8, sy + 14 + i * 5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx + 22, sy + 12 + i * 5); ctx.lineTo(sx + 18, sy + 14 + i * 5); ctx.stroke();
+      }
+    }
+
+    // Cheetah spots
+    if (this.type === 'cheetah') {
+      ctx.fillStyle = '#5d4037';
+      ctx.beginPath(); ctx.arc(sx + 8, sy + 15, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 17, sy + 18, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 11, sy + 23, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Head
+    ctx.fillStyle = c.head;
+    ctx.beginPath();
+    ctx.arc(sx + 13, sy + 5, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Unicorn horn
+    if (this.type === 'unicorn') {
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath(); ctx.moveTo(sx + 10, sy - 2); ctx.lineTo(sx + 13, sy - 12); ctx.lineTo(sx + 16, sy - 2); ctx.fill();
+    }
+
+    // Eyes
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(sx + 11, sy + 4, 1.3, 0, Math.PI * 2);
+    ctx.arc(sx + 15, sy + 4, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Name label
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(this.type, sx - 2, sy - 6);
+  }
+
+  getBounds() { return { x: this.x, y: this.y, w: this.w, h: this.h }; }
+}
