@@ -7,7 +7,7 @@ const ICONS = {
 
 const UI = {
   hudEl: null, invEl: null, craftEl: null, faintEl: null, promptEl: null,
-  invOpen: false, craftOpen: false, tableOpen: false, fridgeOpen: false, wardrobeOpen: false, mirrorOpen: false,
+  invOpen: false, craftOpen: false, tableOpen: false, fridgeOpen: false, wardrobeOpen: false, mirrorOpen: false, shopOpen: false,
 
   init() {
     this.hudEl = document.getElementById('hud');
@@ -31,7 +31,7 @@ const UI = {
         <div class="hud-stat">❤️ <div class="stat-bar"><div class="stat-fill health-fill" style="width:${hp}%"></div></div></div>
         <div class="hud-stat">🍗 <div class="stat-bar"><div class="stat-fill hunger-fill" style="width:${hg}%"></div></div></div>
         <div class="hud-stat">🪵 ${player.countItem('wood')} 🪨 ${player.countItem('stone')}</div>
-        <div class="hud-stat">🎒 ${player.inventory.filter(s=>s).length}/7</div>
+        <div class="hud-stat">🎒 ${player.inventory.filter(s=>s).length}/20</div>
         <div class="hud-stat">🔧 ${eq ? eq.type : 'none'}</div>
       </div>`;
   },
@@ -57,8 +57,8 @@ const UI = {
   },
 
   renderInventory(player) {
-    let html = '<h2>� Backpack</h2><div class="inv-slots">';
-    for (let i = 0; i < 7; i++) {
+    let html = '<h2>🎒 Backpack</h2><div class="inv-slots" style="grid-template-columns:repeat(5,1fr)">';
+    for (let i = 0; i < 20; i++) {
       const s = player.inventory[i];
       const eq = player.equippedSlot === i ? ' style="border-color:#ffeb3b"' : '';
       if (s) {
@@ -240,8 +240,8 @@ const UI = {
   renderTableUI(game) {
     const player = game.player, slots = game.houseInterior.table.slots;
     let html = '<h2>📦 Table Storage (100 per slot)</h2>';
-    html += '<p style="font-size:12px;color:#aaa;margin-bottom:6px">Backpack → Table:</p><div class="inv-slots">';
-    for (let i = 0; i < 7; i++) {
+    html += '<p style="font-size:12px;color:#aaa;margin-bottom:6px">Backpack → Table:</p><div class="inv-slots" style="grid-template-columns:repeat(5,1fr)">';
+    for (let i = 0; i < 20; i++) {
       const s = player.inventory[i];
       html += s ? `<div class="inv-slot" data-action="to-table" data-slot="${i}">${ICONS[s.type]||'?'}${s.count>1?`<span class="count">x${s.count}</span>`:''}
         <span class="item-name">${s.type}</span></div>` : '<div class="inv-slot">-</div>';
@@ -297,8 +297,8 @@ const UI = {
     const player = game.player, slots = game.houseInterior.fridge.slots;
     const foodTypes = ['fruit','apple','sandwich','human_meat','cooked_food','cooked_human_meat','cooked_apple','cooked_fruit'];
     let html = '<h2>🧊 Fridge (1 food per slot)</h2>';
-    html += '<p style="font-size:12px;color:#aaa;margin-bottom:6px">Backpack food → Fridge:</p><div class="inv-slots">';
-    for (let i = 0; i < 7; i++) {
+    html += '<p style="font-size:12px;color:#aaa;margin-bottom:6px">Backpack food → Fridge:</p><div class="inv-slots" style="grid-template-columns:repeat(5,1fr)">';
+    for (let i = 0; i < 20; i++) {
       const s = player.inventory[i];
       if (s && foodTypes.includes(s.type)) {
         html += `<div class="inv-slot" data-action="to-fridge" data-slot="${i}">${ICONS[s.type]||'?'}${s.count>1?`<span class="count">x${s.count}</span>`:''}
@@ -510,6 +510,83 @@ const UI = {
     });
   },
 
+  // ---- SHOP UI (Market buy/sell) ----
+  toggleShopUI(game) {
+    this.shopOpen = !this.shopOpen;
+    if (this.shopOpen) {
+      this._closeOthers('shop');
+      this.renderShopUI(game);
+      this.invEl.classList.remove('hidden');
+    } else this.invEl.classList.add('hidden');
+  },
+
+  renderShopUI(game) {
+    const player = game.player;
+    const goldCount = player.countItem('gold');
+
+    const buyItems = [
+      { type: 'fruit', name: 'Fruit', price: 4, icon: '🍐' },
+      { type: 'apple', name: 'Apple', price: 3, icon: '🍎' },
+      { type: 'sandwich', name: 'Sandwich', price: 6, icon: '🥪' },
+      { type: 'human_meat', name: 'Human Meat', price: 10, icon: '🍖' },
+    ];
+
+    const sellItems = [
+      { type: 'fruit', name: 'Fruit', price: 2, icon: '🍐' },
+      { type: 'apple', name: 'Apple', price: 1, icon: '🍎' },
+      { type: 'human_meat', name: 'Human Meat', price: 5, icon: '🍖' },
+      { type: 'cooked_human_meat', name: 'Cooked Human Meat', price: 12, icon: '🥩' },
+      { type: 'cooked_apple', name: 'Cooked Apple', price: 5, icon: '🍏' },
+      { type: 'cooked_fruit', name: 'Cooked Fruit', price: 4, icon: '🍊' },
+      { type: 'wood', name: 'Wood', price: 1, icon: '🪵' },
+      { type: 'stone', name: 'Stone', price: 1, icon: '🪨' },
+    ];
+
+    let html = '<h2>🏪 Critter Market</h2>';
+    html += `<p style="text-align:center;margin-bottom:8px;color:#ffeb3b">✨ Your gold: ${goldCount}</p>`;
+
+    html += '<h3 style="margin:8px 0 4px;font-size:14px;color:#aaa">Buy from shopkeepers:</h3>';
+    for (const item of buyItems) {
+      const canBuy = goldCount >= item.price;
+      html += `<div class="craft-item"><span>${item.icon} ${item.name} — ${item.price} gold</span>
+        <button data-buy="${item.type}" data-price="${item.price}" ${canBuy?'':'disabled'}>Buy</button></div>`;
+    }
+
+    html += '<h3 style="margin:12px 0 4px;font-size:14px;color:#aaa">Sell to shopkeepers:</h3>';
+    for (const item of sellItems) {
+      const has = player.hasItem(item.type);
+      html += `<div class="craft-item"><span>${item.icon} ${item.name} → ${item.price} gold</span>
+        <button data-sell-market="${item.type}" data-price="${item.price}" ${has?'':'disabled'}>Sell</button></div>`;
+    }
+
+    html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888">Click outside or press [Escape] to close</p>';
+    this.invEl.innerHTML = html;
+
+    this.invEl.querySelectorAll('button[data-buy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.buy;
+        const price = parseInt(btn.dataset.price);
+        if (player.countItem('gold') >= price) {
+          player.removeItem('gold', price);
+          player.addItem(type, 1);
+          this.renderShopUI(game);
+        }
+      });
+    });
+
+    this.invEl.querySelectorAll('button[data-sell-market]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.sellMarket;
+        const price = parseInt(btn.dataset.price);
+        if (player.hasItem(type)) {
+          player.removeItem(type, 1);
+          player.addItem('gold', price);
+          this.renderShopUI(game);
+        }
+      });
+    });
+  },
+
   _closeOthers(except) {
     if (except !== 'inv') { this.invOpen = false; }
     if (except !== 'craft') { this.craftOpen = false; this.craftEl.classList.add('hidden'); }
@@ -517,7 +594,8 @@ const UI = {
     if (except !== 'fridge') { this.fridgeOpen = false; }
     if (except !== 'wardrobe') { this.wardrobeOpen = false; }
     if (except !== 'mirror') { this.mirrorOpen = false; }
-    if (except !== 'inv' && except !== 'table' && except !== 'fridge' && except !== 'wardrobe' && except !== 'mirror') {
+    if (except !== 'shop') { this.shopOpen = false; }
+    if (except !== 'inv' && except !== 'table' && except !== 'fridge' && except !== 'wardrobe' && except !== 'mirror' && except !== 'shop') {
       this.invEl.classList.add('hidden');
     }
   },
@@ -525,6 +603,7 @@ const UI = {
   closeAll() {
     this.invOpen = false; this.craftOpen = false; this.tableOpen = false;
     this.fridgeOpen = false; this.wardrobeOpen = false; this.mirrorOpen = false;
+    this.shopOpen = false;
     this.invEl.classList.add('hidden'); this.craftEl.classList.add('hidden');
   }
 };

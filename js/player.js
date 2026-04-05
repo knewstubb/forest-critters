@@ -21,7 +21,7 @@ class Player {
 
     // Inventory: 7 slots, items stack by type
     // Each slot: { type, count, maxStack } or null
-    this.inventory = [null, null, null, null, null, null, null];
+    this.inventory = new Array(20).fill(null);
     this.equippedSlot = -1; // index of equipped item
 
     // Combat
@@ -47,34 +47,28 @@ class Player {
   }
 
   addItem(type, count = 1) {
-    const stackLimits = { wood: 20, gold: 10, fruit: 5, apple: 5, sandwich: 5, human_meat: 5, cooked_food: 5, cooked_human_meat: 5, cooked_apple: 5, cooked_fruit: 5, stone: 20 };
-    const maxStack = stackLimits[type] || 1;
-
     let remaining = count;
-    // Try to stack onto existing slots
-    for (let i = 0; i < 7 && remaining > 0; i++) {
-      if (this.inventory[i] && this.inventory[i].type === type && this.inventory[i].count < maxStack) {
-        const space = maxStack - this.inventory[i].count;
-        const add = Math.min(space, remaining);
-        this.inventory[i].count += add;
-        remaining -= add;
+    // Try to stack onto existing slots of same type
+    for (let i = 0; i < this.inventory.length && remaining > 0; i++) {
+      if (this.inventory[i] && this.inventory[i].type === type) {
+        this.inventory[i].count += remaining;
+        remaining = 0;
       }
     }
     // Try empty slots
-    for (let i = 0; i < 7 && remaining > 0; i++) {
+    for (let i = 0; i < this.inventory.length && remaining > 0; i++) {
       if (!this.inventory[i]) {
-        const add = Math.min(maxStack, remaining);
-        this.inventory[i] = { type, count: add, maxStack };
-        remaining -= add;
+        this.inventory[i] = { type, count: remaining };
+        remaining = 0;
       }
     }
-    return count - remaining; // how many actually added
+    return count - remaining;
   }
 
   removeItem(type, count = 1) {
     let remaining = count;
     // Remove from inventory first
-    for (let i = 6; i >= 0 && remaining > 0; i--) {
+    for (let i = this.inventory.length - 1; i >= 0 && remaining > 0; i--) {
       if (this.inventory[i] && this.inventory[i].type === type) {
         const remove = Math.min(this.inventory[i].count, remaining);
         this.inventory[i].count -= remove;

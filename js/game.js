@@ -15,6 +15,10 @@ const Game = {
     axe: false,       // 45 stone — 5 slabs per tree
   },
   hotels: [],        // array of { x, y, goldBox, guestSpawnTimer }
+  insideHotel: false,
+  currentHotelIndex: -1,
+  insideMarket: false,
+  currentMarketDeco: null, // reference to the decoration
   guestSpawnTimer: 0,
   humanSpawnTimer: 0,
   placementMode: null, // { type } — when set, shows ghost preview for placing
@@ -231,16 +235,57 @@ const Game = {
     this.currentHouseIndex = -1;
   },
 
+  enterHotel(hotelIndex) {
+    this.insideHotel = true;
+    this.currentHotelIndex = hotelIndex;
+    const o = this.getInteriorOrigin();
+    this.player.x = o.x + 200; this.player.y = o.y + 250;
+  },
+
+  exitHotel() {
+    const hotel = this.hotels[this.currentHotelIndex];
+    this.insideHotel = false;
+    this.player.x = hotel.x + 40;
+    this.player.y = hotel.y + 70;
+    this.currentHotelIndex = -1;
+  },
+
+  enterMarket(deco) {
+    this.insideMarket = true;
+    this.currentMarketDeco = deco;
+    const o = this.getInteriorOrigin();
+    this.player.x = o.x + 210; this.player.y = o.y + 250;
+  },
+
+  exitMarket() {
+    this.insideMarket = false;
+    this.player.x = this.currentMarketDeco.x + 20;
+    this.player.y = this.currentMarketDeco.y + 45;
+    this.currentMarketDeco = null;
+  },
+
   getInteriorOrigin() {
+    let w, h;
+    if (this.insideHotel) { w = 400; h = 300; }
+    else if (this.insideMarket) { w = 420; h = 300; }
+    else { w = this.houseInterior.w; h = this.houseInterior.h; }
     return {
-      x: (this.canvas.width - this.houseInterior.w) / 2,
-      y: (this.canvas.height - this.houseInterior.h) / 2
+      x: (this.canvas.width - w) / 2,
+      y: (this.canvas.height - h) / 2
     };
   },
 
-  playerInZone(zone) {
+  getInteriorSize() {
+    if (this.insideHotel) return { w: 400, h: 300 };
+    if (this.insideMarket) return { w: 420, h: 300 };
+    return { w: this.houseInterior.w, h: this.houseInterior.h };
+  },
+
+  isInsideAny() { return this.insideHouse || this.insideHotel || this.insideMarket; },
+
+  playerInZone(zone, origin) {
     if (!zone) return false;
-    const o = this.getInteriorOrigin();
+    const o = origin || this.getInteriorOrigin();
     const px = this.player.x, py = this.player.y;
     return px > o.x+zone.x && px < o.x+zone.x+zone.w &&
            py > o.y+zone.y && py < o.y+zone.y+zone.h;
@@ -251,7 +296,10 @@ const Game = {
       const key = e.key.toLowerCase();
       this.player.keys[key] = true;
       if (key === 'i') {
-        if (this.insideHouse) UI.toggleTableUI(this);
+        if (this.isInsideAny()) {
+          if (this.insideHouse) UI.toggleTableUI(this);
+          else UI.toggleInventory(this.player);
+        }
         else UI.toggleInventory(this.player);
       }
       if (key === 'c') UI.toggleCraft(this.player, this);
@@ -264,7 +312,7 @@ const Game = {
     this.canvas.addEventListener('mousemove', e => {
       const rect = this.canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      if (this.insideHouse) {
+      if (this.isInsideAny()) {
         this.player.mouseX = mx; this.player.mouseY = my;
         this.player.angle = Math.atan2(my - (this.player.y+this.player.h/2), mx - (this.player.x+this.player.w/2));
       } else {
@@ -276,9 +324,9 @@ const Game = {
 
     this.canvas.addEventListener('mousedown', e => {
       if (e.button === 0) {
-        if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen) return;
+        if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen || UI.shopOpen) return;
         // Placement mode — place item at mouse position
-        if (!this.insideHouse && this.placementMode) {
+        if (!this.isInsideAny() && this.placementMode) {
           const px = this.player.mouseX - 20;
           const py = this.player.mouseY - 20;
           const type = this.placementMode.type;
@@ -297,7 +345,7 @@ const Game = {
           this.placementMode = null;
           return;
         }
-        if (this.insideHouse) this.interactHouse();
+        if (this.isInsideAny()) this.interactInterior();
         else { this.interact(); this.attack(); }
       }
       if (e.button === 2 && this.placementMode) {
@@ -377,7 +425,7 @@ const Game = {
 
     if (btnInteract) btnInteract.addEventListener('touchstart', e => {
       e.preventDefault();
-      if (this.insideHouse) this.interactHouse();
+      if (this.isInsideAny()) this.interactInterior();
       else { this.interact(); this.attack(); }
     });
     if (btnEat) btnEat.addEventListener('touchstart', e => { e.preventDefault(); this.tryEat(); });
@@ -393,7 +441,7 @@ const Game = {
 
     // Touch on canvas for placement mode and interaction
     this.canvas.addEventListener('touchstart', e => {
-      if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen) return;
+      if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen || UI.shopOpen) return;
       const touch = e.changedTouches[0];
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / rect.width;
@@ -401,7 +449,7 @@ const Game = {
       const mx = (touch.clientX - rect.left) * scaleX;
       const my = (touch.clientY - rect.top) * scaleY;
 
-      if (this.insideHouse) {
+      if (this.isInsideAny()) {
         this.player.mouseX = mx;
         this.player.mouseY = my;
         this.player.angle = Math.atan2(my - (this.player.y + this.player.h/2), mx - (this.player.x + this.player.w/2));
@@ -436,6 +484,40 @@ const Game = {
       const dx = (e.x+(e.w||0)/2)-(p.x+p.w/2), dy = (e.y+(e.h||0)/2)-(p.y+p.h/2);
       return Math.sqrt(dx*dx+dy*dy) < range;
     });
+  },
+
+  interactInterior() {
+    if (this.insideHouse) return this.interactHouse();
+    if (this.insideHotel) return this.interactHotelInterior();
+    if (this.insideMarket) return this.interactMarketInterior();
+  },
+
+  interactHotelInterior() {
+    const o = this.getInteriorOrigin();
+    const p = this.player;
+    // Door zone
+    const door = { x: 170, y: 260, w: 60, h: 40 };
+    if (this.playerInZone(door, o)) { this.exitHotel(); return; }
+    // Gold box zone
+    const goldBox = { x: 10, y: 10, w: 60, h: 50 };
+    if (this.playerInZone(goldBox, o)) {
+      const hotel = this.hotels[this.currentHotelIndex];
+      if (hotel.goldBox > 0) {
+        p.addItem('gold', hotel.goldBox);
+        hotel.goldBox = 0;
+      }
+      return;
+    }
+  },
+
+  interactMarketInterior() {
+    const o = this.getInteriorOrigin();
+    // Door zone
+    const door = { x: 180, y: 260, w: 60, h: 40 };
+    if (this.playerInZone(door, o)) { this.exitMarket(); return; }
+    // Shop counter zone
+    const counter = { x: 60, y: 30, w: 300, h: 60 };
+    if (this.playerInZone(counter, o)) { UI.toggleShopUI(this); return; }
   },
 
   interactHouse() {
@@ -475,13 +557,22 @@ const Game = {
       if (Math.sqrt(dx*dx+dy*dy) < 40) { this.enterHouse(i); return; }
     }
 
-    // Collect gold from hotel boxes
-    for (const hotel of this.hotels) {
-      if (hotel.goldBox > 0) {
-        const dx = (p.x+p.w/2)-(hotel.x+40), dy = (p.y+p.h/2)-(hotel.y+40);
-        if (Math.sqrt(dx*dx+dy*dy) < 50) {
-          p.addItem('gold', hotel.goldBox);
-          hotel.goldBox = 0;
+    // Collect gold from hotel boxes or enter hotel
+    for (let i = 0; i < this.hotels.length; i++) {
+      const hotel = this.hotels[i];
+      const dx = (p.x+p.w/2)-(hotel.x+40), dy = (p.y+p.h/2)-(hotel.y+40);
+      if (Math.sqrt(dx*dx+dy*dy) < 50) {
+        this.enterHotel(i);
+        return;
+      }
+    }
+
+    // Enter market decorations
+    for (const dec of this.entities.decorations) {
+      if (dec.type === 'market') {
+        const dx = (p.x+p.w/2)-(dec.x+20), dy = (p.y+p.h/2)-(dec.y+20);
+        if (Math.sqrt(dx*dx+dy*dy) < 45) {
+          this.enterMarket(dec);
           return;
         }
       }
@@ -537,7 +628,7 @@ const Game = {
   },
 
   attack() {
-    if (this.player.fainted || this.insideHouse) return;
+    if (this.player.fainted || this.isInsideAny()) return;
     const p = this.player, eq = p.getEquipped();
     if (p.attackCooldown > 0) return;
     let damage = 5;
@@ -583,7 +674,7 @@ const Game = {
 
   update(dt) {
     const p = this.player;
-    if (this.insideHouse) { this.updateHouseInterior(dt); return; }
+    if (this.isInsideAny()) { this.updateInterior(dt); return; }
 
     p.update(dt);
     p.x = Math.max(0, Math.min(this.worldSize-p.w, p.x));
@@ -680,6 +771,43 @@ const Game = {
     UI.updateHUD(p);
   },
 
+  updateInterior(dt) {
+    if (this.insideHouse) return this.updateHouseInterior(dt);
+    if (this.insideHotel) return this.updateHotelInterior(dt);
+    if (this.insideMarket) return this.updateMarketInterior(dt);
+  },
+
+  updateHotelInterior(dt) {
+    const p = this.player, o = this.getInteriorOrigin();
+    const sz = this.getInteriorSize();
+    p.update(dt);
+    p.x = Math.max(o.x+5, Math.min(o.x+sz.w-p.w-5, p.x));
+    p.y = Math.max(o.y+5, Math.min(o.y+sz.h-p.h-5, p.y));
+    const door = { x: 170, y: 260, w: 60, h: 40 };
+    const goldBox = { x: 10, y: 10, w: 60, h: 50 };
+    const hotel = this.hotels[this.currentHotelIndex];
+    if (this.playerInZone(door, o)) UI.showPrompt('Click to exit hotel');
+    else if (this.playerInZone(goldBox, o)) {
+      if (hotel.goldBox > 0) UI.showPrompt(`Click to collect ${hotel.goldBox} gold`);
+      else UI.showPrompt('Gold box — empty');
+    } else UI.hidePrompt();
+    UI.updateHUD(p);
+  },
+
+  updateMarketInterior(dt) {
+    const p = this.player, o = this.getInteriorOrigin();
+    const sz = this.getInteriorSize();
+    p.update(dt);
+    p.x = Math.max(o.x+5, Math.min(o.x+sz.w-p.w-5, p.x));
+    p.y = Math.max(o.y+5, Math.min(o.y+sz.h-p.h-5, p.y));
+    const door = { x: 180, y: 260, w: 60, h: 40 };
+    const counter = { x: 60, y: 30, w: 300, h: 60 };
+    if (this.playerInZone(door, o)) UI.showPrompt('Click to exit market');
+    else if (this.playerInZone(counter, o)) UI.showPrompt('Click to open shop');
+    else UI.hidePrompt();
+    UI.updateHUD(p);
+  },
+
   updateHouseInterior(dt) {
     const p = this.player, hi = this.houseInterior, o = this.getInteriorOrigin();
     const sleepTime = this.getSleepTime();
@@ -742,9 +870,18 @@ const Game = {
     for (const hotel of this.hotels) {
       const dx = (p.x+p.w/2)-(hotel.x+40), dy = (p.y+p.h/2)-(hotel.y+40);
       if (Math.sqrt(dx*dx+dy*dy) < 50) {
-        if (hotel.goldBox > 0) UI.showPrompt(`Click to collect ${hotel.goldBox} gold from hotel`);
-        else UI.showPrompt('Hotel — no gold to collect');
+        UI.showPrompt('Click to enter hotel');
         return;
+      }
+    }
+    // Check markets for prompt
+    for (const dec of this.entities.decorations) {
+      if (dec.type === 'market') {
+        const dx = (p.x+p.w/2)-(dec.x+20), dy = (p.y+p.h/2)-(dec.y+20);
+        if (Math.sqrt(dx*dx+dy*dy) < 45) {
+          UI.showPrompt('Click to enter market');
+          return;
+        }
       }
     }
     const nearItems = this.getNearby(this.entities.groundItems, 40);
@@ -770,6 +907,8 @@ const Game = {
 
   render() {
     if (this.insideHouse) { this.renderHouseInterior(); return; }
+    if (this.insideHotel) { this.renderHotelInterior(); return; }
+    if (this.insideMarket) { this.renderMarketInterior(); return; }
     const ctx = this.ctx, cam = this.camera, cw = this.canvas.width, ch = this.canvas.height;
     ctx.fillStyle = '#5a8f3c'; ctx.fillRect(0, 0, cw, ch);
     for (const tile of this.grassTiles) {
@@ -982,6 +1121,163 @@ const Game = {
     ctx.font = '11px sans-serif'; ctx.fillStyle = '#aaa'; ctx.fillText('🚪 Exit', dx+4, dy+hi.door.h+13);
 
     this.player.draw(ctx, { x: 0, y: 0 });
+  },
+
+  renderHotelInterior() {
+    const ctx = this.ctx, cw = this.canvas.width, ch = this.canvas.height;
+    const o = this.getInteriorOrigin();
+    const w = 400, h = 300;
+    const hotel = this.hotels[this.currentHotelIndex];
+
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, cw, ch);
+    // Floor
+    ctx.fillStyle = '#b0bec5'; ctx.fillRect(o.x, o.y, w, h);
+    // Floor tiles
+    ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 0.5;
+    for (let y = o.y; y < o.y+h; y += 30) { ctx.beginPath(); ctx.moveTo(o.x, y); ctx.lineTo(o.x+w, y); ctx.stroke(); }
+    for (let x = o.x; x < o.x+w; x += 30) { ctx.beginPath(); ctx.moveTo(x, o.y); ctx.lineTo(x, o.y+h); ctx.stroke(); }
+    // Walls
+    ctx.fillStyle = '#546e7a';
+    ctx.fillRect(o.x, o.y-10, w, 12);
+    ctx.fillRect(o.x-10, o.y, 12, h);
+    ctx.fillRect(o.x+w-2, o.y, 12, h);
+
+    // Beds (6 beds in 2 rows)
+    const bedPositions = [
+      { x: 90, y: 10 }, { x: 170, y: 10 }, { x: 250, y: 10 },
+      { x: 90, y: 80 }, { x: 170, y: 80 }, { x: 250, y: 80 },
+    ];
+    for (const bp of bedPositions) {
+      const bx = o.x+bp.x, by = o.y+bp.y;
+      ctx.fillStyle = '#5d4037'; ctx.fillRect(bx, by, 60, 40);
+      ctx.fillStyle = '#bbdefb'; ctx.fillRect(bx+3, by+3, 54, 34);
+      ctx.fillStyle = '#c8e6c9'; ctx.fillRect(bx+3, by+3, 16, 34);
+      ctx.font = '14px serif'; ctx.fillText('💤', bx+30, by+25);
+    }
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#555';
+    ctx.fillText('🛏️ Guest Beds', o.x+150, o.y+135);
+
+    // Gold box
+    const gbx = o.x+10, gby = o.y+10;
+    ctx.fillStyle = '#ffd54f'; ctx.fillRect(gbx, gby, 60, 50);
+    ctx.fillStyle = '#ffb300'; ctx.fillRect(gbx+3, gby+3, 54, 44);
+    ctx.fillStyle = '#fff'; ctx.font = '20px serif';
+    ctx.fillText('✨', gbx+18, gby+32);
+    ctx.font = '12px sans-serif'; ctx.fillStyle = '#333';
+    ctx.fillText(`${hotel.goldBox} gold`, gbx+5, gby+60);
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#555';
+    ctx.fillText('💰 Gold Box', gbx+2, gby+72);
+
+    // Reception desk
+    ctx.fillStyle = '#795548'; ctx.fillRect(o.x+10, o.y+160, 80, 30);
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(o.x+12, o.y+162, 76, 26);
+    ctx.font = '10px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText('RECEPTION', o.x+20, o.y+178);
+
+    // Door
+    const dx = o.x+170, dy = o.y+260;
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(dx, dy, 60, 40);
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(dx+4, dy+4, 52, 32);
+    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(dx+50, dy+20, 3, 0, Math.PI*2); ctx.fill();
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#aaa'; ctx.fillText('🚪 Exit', dx+12, dy-4);
+
+    this.player.draw(ctx, { x: 0, y: 0 });
+  },
+
+  renderMarketInterior() {
+    const ctx = this.ctx, cw = this.canvas.width, ch = this.canvas.height;
+    const o = this.getInteriorOrigin();
+    const w = 420, h = 300;
+
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, cw, ch);
+    // Floor — warm wood
+    ctx.fillStyle = '#a1887f'; ctx.fillRect(o.x, o.y, w, h);
+    ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 0.5;
+    for (let y = o.y; y < o.y+h; y += 20) { ctx.beginPath(); ctx.moveTo(o.x, y); ctx.lineTo(o.x+w, y); ctx.stroke(); }
+    // Walls
+    ctx.fillStyle = '#6d4c41';
+    ctx.fillRect(o.x, o.y-10, w, 12);
+    ctx.fillRect(o.x-10, o.y, 12, h);
+    ctx.fillRect(o.x+w-2, o.y, 12, h);
+
+    // Counter
+    ctx.fillStyle = '#795548'; ctx.fillRect(o.x+60, o.y+30, 300, 60);
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(o.x+62, o.y+32, 296, 56);
+    // Goods on counter
+    ctx.font = '18px serif';
+    ctx.fillText('🍐', o.x+80, o.y+65);
+    ctx.fillText('🍖', o.x+120, o.y+65);
+    ctx.fillText('🍎', o.x+160, o.y+65);
+    ctx.fillText('🥪', o.x+200, o.y+65);
+    ctx.fillText('✨', o.x+240, o.y+65);
+    ctx.fillText('🥩', o.x+280, o.y+65);
+    ctx.fillText('🍏', o.x+320, o.y+65);
+
+    // Shop sign
+    ctx.fillStyle = '#e53935'; ctx.fillRect(o.x+140, o.y+2, 140, 22);
+    ctx.fillStyle = '#fff'; ctx.font = '14px sans-serif';
+    ctx.fillText('🏪 CRITTER MARKET', o.x+148, o.y+18);
+
+    // NPC shopkeepers behind counter
+    const npcs = [
+      { type: 'turtle', x: 100, y: 15 },
+      { type: 'unicorn', x: 180, y: 12 },
+      { type: 'turtle', x: 260, y: 15 },
+      { type: 'unicorn', x: 340, y: 12 },
+    ];
+    for (const npc of npcs) {
+      const nx = o.x+npc.x, ny = o.y+npc.y;
+      if (npc.type === 'turtle') {
+        ctx.fillStyle = '#2e7d32';
+        ctx.beginPath(); ctx.ellipse(nx, ny+12, 10, 12, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#66bb6a';
+        ctx.beginPath(); ctx.arc(nx, ny, 7, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(nx-2, ny-1, 1.2, 0, Math.PI*2); ctx.arc(nx+2, ny-1, 1.2, 0, Math.PI*2); ctx.fill();
+      } else {
+        ctx.fillStyle = '#e8eaf6';
+        ctx.beginPath(); ctx.ellipse(nx, ny+12, 10, 12, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#e8eaf6';
+        ctx.beginPath(); ctx.arc(nx, ny, 7, 0, Math.PI*2); ctx.fill();
+        // Horn
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath(); ctx.moveTo(nx-3, ny-6); ctx.lineTo(nx, ny-16); ctx.lineTo(nx+3, ny-6); ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(nx-2, ny-1, 1.2, 0, Math.PI*2); ctx.arc(nx+2, ny-1, 1.2, 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    // Shelves on sides
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(o.x+10, o.y+120, 60, 80);
+    ctx.fillStyle = '#795548';
+    ctx.fillRect(o.x+12, o.y+122, 56, 25);
+    ctx.fillRect(o.x+12, o.y+150, 56, 25);
+    ctx.fillRect(o.x+12, o.y+178, 56, 20);
+    ctx.font = '14px serif';
+    ctx.fillText('🍐🍐🍐', o.x+16, o.y+142);
+    ctx.fillText('🍖🍖', o.x+20, o.y+168);
+    ctx.fillText('🍎🍎', o.x+20, o.y+194);
+
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(o.x+350, o.y+120, 60, 80);
+    ctx.fillStyle = '#795548';
+    ctx.fillRect(o.x+352, o.y+122, 56, 25);
+    ctx.fillRect(o.x+352, o.y+150, 56, 25);
+    ctx.fillRect(o.x+352, o.y+178, 56, 20);
+    ctx.font = '14px serif';
+    ctx.fillText('🥩🥩', o.x+356, o.y+142);
+    ctx.fillText('🍏🍏', o.x+356, o.y+168);
+    ctx.fillText('🍊🍊', o.x+356, o.y+194);
+
+    // Door
+    const dx = o.x+180, dy = o.y+260;
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(dx, dy, 60, 40);
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(dx+4, dy+4, 52, 32);
+    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(dx+50, dy+20, 3, 0, Math.PI*2); ctx.fill();
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#aaa'; ctx.fillText('🚪 Exit', dx+12, dy-4);
+
+    this.player.draw(ctx, { x: 0, y: 0 });
   }
 };
 
@@ -1018,6 +1314,8 @@ const SaveSystem = {
       upgrades: game.upgrades,
       insideHouse: game.insideHouse,
       currentHouseIndex: game.currentHouseIndex,
+      insideHotel: game.insideHotel,
+      currentHotelIndex: game.currentHotelIndex,
       outfit: p.outfit,
       trees: game.entities.trees.map(t => ({ x:t.x, y:t.y, slabs:t.slabs, alive:t.alive })),
       stones: game.entities.stones.map(s => ({ x:s.x, y:s.y, hits:s.hits, alive:s.alive, hasGold:s.hasGold })),
@@ -1101,6 +1399,8 @@ Game.loadFromSave = function(data) {
   this.upgrades = { axe: data.upgrades.axe || false };
   this.insideHouse = data.insideHouse || false;
   this.currentHouseIndex = data.currentHouseIndex >= 0 ? data.currentHouseIndex : (this.insideHouse ? 0 : -1);
+  this.insideHotel = data.insideHotel || false;
+  this.currentHotelIndex = data.currentHotelIndex >= 0 ? data.currentHotelIndex : -1;
 
   if (data.outfit) this.player.outfit = data.outfit;
 
