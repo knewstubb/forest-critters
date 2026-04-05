@@ -547,3 +547,97 @@ class Villager {
 
   getBounds() { return { x: this.x, y: this.y, w: this.w, h: this.h }; }
 }
+
+class TownHuman {
+  constructor(x, y, homeX, homeY) {
+    this.x = x;
+    this.y = y;
+    this.w = 28;
+    this.h = 36;
+    this.homeX = homeX;
+    this.homeY = homeY;
+    this.alive = true;
+    this.speed = 0.6 + Math.random() * 0.3;
+    this.dir = Math.random() * Math.PI * 2;
+    this.dirTimer = 0;
+    this.seesPlayer = false;
+    this.attackCooldown = 0;
+    this.justAttacked = false; // set true on the frame they land a hit
+  }
+
+  update(dt, player) {
+    if (!this.alive) return;
+    this.dirTimer -= dt;
+    this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+    this.justAttacked = false;
+
+    const dx = player.x - this.x, dy = player.y - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    this.seesPlayer = dist < 180 && !player.isDisguised() && !player.fainted;
+
+    if (this.seesPlayer) {
+      // Chase player
+      const ang = Math.atan2(dy, dx);
+      this.x += Math.cos(ang) * this.speed * 1.5 * dt * 60;
+      this.y += Math.sin(ang) * this.speed * 1.5 * dt * 60;
+      // Attack if close
+      if (dist < 30 && this.attackCooldown <= 0) {
+        this.justAttacked = true;
+        this.attackCooldown = 1.2;
+      }
+    } else {
+      // Wander near home
+      if (this.dirTimer <= 0) {
+        const hdx = this.homeX - this.x, hdy = this.homeY - this.y;
+        const hdist = Math.sqrt(hdx * hdx + hdy * hdy);
+        if (hdist > 100) {
+          this.dir = Math.atan2(hdy, hdx) + (Math.random() - 0.5) * 0.8;
+        } else {
+          this.dir = Math.random() * Math.PI * 2;
+        }
+        this.dirTimer = 2 + Math.random() * 3;
+      }
+      this.x += Math.cos(this.dir) * this.speed * dt * 60;
+      this.y += Math.sin(this.dir) * this.speed * dt * 60;
+    }
+  }
+
+  draw(ctx, cam) {
+    if (!this.alive) return;
+    const sx = this.x - cam.x, sy = this.y - cam.y;
+    // Body
+    ctx.fillStyle = '#ffcc80';
+    ctx.fillRect(sx + 6, sy + 12, 16, 20);
+    // Shirt
+    ctx.fillStyle = '#1565C0';
+    ctx.fillRect(sx + 6, sy + 12, 16, 12);
+    // Pants
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(sx + 6, sy + 24, 7, 8);
+    ctx.fillRect(sx + 15, sy + 24, 7, 8);
+    // Head
+    ctx.fillStyle = '#ffe0b2';
+    ctx.beginPath();
+    ctx.arc(sx + 14, sy + 10, 10, 0, Math.PI * 2);
+    ctx.fill();
+    // Hair
+    ctx.fillStyle = '#5d4037';
+    ctx.beginPath();
+    ctx.arc(sx + 14, sy + 6, 10, Math.PI, Math.PI * 2);
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#333';
+    ctx.fillRect(sx + 10, sy + 8, 3, 3);
+    ctx.fillRect(sx + 16, sy + 8, 3, 3);
+    // Alert/chase indicator
+    if (this.seesPlayer) {
+      ctx.fillStyle = '#f44336';
+      ctx.font = '14px sans-serif';
+      ctx.fillText('⚠️', sx + 6, sy - 6);
+    }
+  }
+
+  getBounds() {
+    return { x: this.x, y: this.y, w: this.w, h: this.h };
+  }
+}

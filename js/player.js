@@ -120,6 +120,10 @@ class Player {
     return this.inventory.every(s => s !== null);
   }
 
+  isDisguised() {
+    return !!(this.outfit.hat && this.outfit.top && this.outfit.bottom);
+  }
+
   takeDamage(amount) {
     // Hat or gold armor reduces damage
     if (this.outfit.hat || this.hasItem('hat')) {
@@ -132,9 +136,9 @@ class Player {
     if (this.health <= 0) this.faint();
   }
 
-  faint() {
+  faint(duration) {
     this.fainted = true;
-    this.faintTimer = 3;
+    this.faintTimer = duration || 3;
   }
 
   eat(type) {

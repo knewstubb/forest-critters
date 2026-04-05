@@ -19,6 +19,8 @@ const Game = {
   currentHotelIndex: -1,
   insideMarket: false,
   currentMarketDeco: null, // reference to the decoration
+  insideHumanShop: false,
+  humanTown: null, // { x, y, houses: [{x,y}], shop: {x,y}, townHumans: [] }
   guestSpawnTimer: 0,
   humanSpawnTimer: 0,
   placementMode: null, // { type } — when set, shows ghost preview for placing
@@ -75,6 +77,34 @@ const Game = {
     for (let i = 0; i < 40; i++) this.entities.stones.push(new Stone(50+Math.random()*(ws-100), 50+Math.random()*(ws-100)));
     for (let i = 0; i < 30; i++) this.entities.dirtPatches.push(new DirtPatch(50+Math.random()*(ws-100), 50+Math.random()*(ws-100)));
     for (let i = 0; i < 4; i++) this.spawnHuman();
+    this.generateHumanTown();
+  },
+
+  generateHumanTown() {
+    // Place town far from center (bottom-right area)
+    const tx = this.worldSize - 400, ty = this.worldSize - 400;
+    const townHouses = [
+      { x: tx, y: ty },
+      { x: tx + 80, y: ty - 10 },
+      { x: tx + 160, y: ty + 5 },
+      { x: tx - 20, y: ty + 90 },
+      { x: tx + 80, y: ty + 85 },
+    ];
+    const shop = { x: tx + 160, y: ty + 90 };
+    const townHumans = [];
+    // Spawn 8 town humans patrolling around the town
+    for (let i = 0; i < 8; i++) {
+      const hx = tx + 80 + (Math.random() - 0.5) * 250;
+      const hy = ty + 60 + (Math.random() - 0.5) * 200;
+      townHumans.push(new TownHuman(hx, hy, tx + 80, ty + 60));
+    }
+    // Pave the town center
+    for (let px = tx - 40; px <= tx + 220; px += 40) {
+      for (let py = ty - 40; py <= ty + 160; py += 40) {
+        this.entities.pavements.push(new Pavement(px, py));
+      }
+    }
+    this.humanTown = { x: tx, y: ty, houses: townHouses, shop, townHumans };
   },
 
   spawnHuman() {
@@ -275,10 +305,23 @@ const Game = {
     this.currentMarketDeco = null;
   },
 
+  enterHumanShop() {
+    this.insideHumanShop = true;
+    const o = this.getInteriorOrigin();
+    this.player.x = o.x + 190; this.player.y = o.y + 230;
+  },
+
+  exitHumanShop() {
+    this.insideHumanShop = false;
+    this.player.x = this.humanTown.shop.x + 20;
+    this.player.y = this.humanTown.shop.y + 45;
+  },
+
   getInteriorOrigin() {
     let w, h;
     if (this.insideHotel) { w = 400; h = 300; }
     else if (this.insideMarket) { w = 420; h = 300; }
+    else if (this.insideHumanShop) { w = 380; h = 280; }
     else { w = this.houseInterior.w; h = this.houseInterior.h; }
     return {
       x: (this.canvas.width - w) / 2,
@@ -289,10 +332,11 @@ const Game = {
   getInteriorSize() {
     if (this.insideHotel) return { w: 400, h: 300 };
     if (this.insideMarket) return { w: 420, h: 300 };
+    if (this.insideHumanShop) return { w: 380, h: 280 };
     return { w: this.houseInterior.w, h: this.houseInterior.h };
   },
 
-  isInsideAny() { return this.insideHouse || this.insideHotel || this.insideMarket; },
+  isInsideAny() { return this.insideHouse || this.insideHotel || this.insideMarket || this.insideHumanShop; },
 
   playerInZone(zone, origin) {
     if (!zone) return false;
@@ -335,7 +379,7 @@ const Game = {
 
     this.canvas.addEventListener('mousedown', e => {
       if (e.button === 0) {
-        if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen || UI.shopOpen) return;
+        if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen || UI.shopOpen || UI.humanShopOpen) return;
         // Placement mode — place item at mouse position
         if (!this.isInsideAny() && this.placementMode) {
           const px = this.player.mouseX - 20;
@@ -453,7 +497,7 @@ const Game = {
 
     // Touch on canvas for placement mode and interaction
     this.canvas.addEventListener('touchstart', e => {
-      if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen || UI.shopOpen) return;
+      if (UI.invOpen || UI.craftOpen || UI.tableOpen || UI.fridgeOpen || UI.wardrobeOpen || UI.mirrorOpen || UI.shopOpen || UI.humanShopOpen) return;
       const touch = e.changedTouches[0];
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / rect.width;
@@ -502,6 +546,7 @@ const Game = {
     if (this.insideHouse) return this.interactHouse();
     if (this.insideHotel) return this.interactHotelInterior();
     if (this.insideMarket) return this.interactMarketInterior();
+    if (this.insideHumanShop) return this.interactHumanShopInterior();
   },
 
   interactHotelInterior() {
@@ -524,12 +569,18 @@ const Game = {
 
   interactMarketInterior() {
     const o = this.getInteriorOrigin();
-    // Door zone
     const door = { x: 180, y: 260, w: 60, h: 40 };
     if (this.playerInZone(door, o)) { this.exitMarket(); return; }
-    // Shop counter zone
     const counter = { x: 60, y: 30, w: 300, h: 60 };
     if (this.playerInZone(counter, o)) { UI.toggleShopUI(this); return; }
+  },
+
+  interactHumanShopInterior() {
+    const o = this.getInteriorOrigin();
+    const door = { x: 155, y: 240, w: 60, h: 40 };
+    if (this.playerInZone(door, o)) { this.exitHumanShop(); return; }
+    const counter = { x: 40, y: 20, w: 300, h: 50 };
+    if (this.playerInZone(counter, o)) { UI.toggleHumanShopUI(this); return; }
   },
 
   interactHouse() {
@@ -587,6 +638,16 @@ const Game = {
           this.enterMarket(dec);
           return;
         }
+      }
+    }
+
+    // Enter human town shop (only if disguised)
+    if (this.humanTown && p.isDisguised()) {
+      const sh = this.humanTown.shop;
+      const dx = (p.x+p.w/2)-(sh.x+25), dy = (p.y+p.h/2)-(sh.y+35);
+      if (Math.sqrt(dx*dx+dy*dy) < 40) {
+        this.enterHumanShop();
+        return;
       }
     }
 
@@ -777,10 +838,8 @@ const Game = {
     // Update villagers
     for (const v of this.entities.villagers) {
       v.update(dt);
-      // Keep villagers in world bounds
       v.x = Math.max(10, Math.min(this.worldSize - 30, v.x));
       v.y = Math.max(10, Math.min(this.worldSize - 30, v.y));
-      // Push villagers away from houses (don't walk through them)
       for (const house of this.houses) {
         if (v.x > house.x - 5 && v.x < house.x + 65 && v.y > house.y && v.y < house.y + 60) {
           const cx = house.x + 30, cy = house.y + 30;
@@ -788,6 +847,19 @@ const Game = {
           v.x = cx + Math.cos(ang) * 45;
           v.y = cy + Math.sin(ang) * 45;
         }
+      }
+    }
+
+    // Update town humans
+    if (this.humanTown) {
+      let attackersThisFrame = 0;
+      for (const th of this.humanTown.townHumans) {
+        th.update(dt, p);
+        if (th.justAttacked) attackersThisFrame++;
+      }
+      // If 2+ town humans attack simultaneously, faint for 10s
+      if (attackersThisFrame >= 2 && !p.fainted) {
+        p.faint(10);
       }
     }
 
@@ -804,6 +876,7 @@ const Game = {
     if (this.insideHouse) return this.updateHouseInterior(dt);
     if (this.insideHotel) return this.updateHotelInterior(dt);
     if (this.insideMarket) return this.updateMarketInterior(dt);
+    if (this.insideHumanShop) return this.updateHumanShopInterior(dt);
   },
 
   updateHotelInterior(dt) {
@@ -833,6 +906,20 @@ const Game = {
     const counter = { x: 60, y: 30, w: 300, h: 60 };
     if (this.playerInZone(door, o)) UI.showPrompt('Click to exit market');
     else if (this.playerInZone(counter, o)) UI.showPrompt('Click to open shop');
+    else UI.hidePrompt();
+    UI.updateHUD(p);
+  },
+
+  updateHumanShopInterior(dt) {
+    const p = this.player, o = this.getInteriorOrigin();
+    const sz = this.getInteriorSize();
+    p.update(dt);
+    p.x = Math.max(o.x+5, Math.min(o.x+sz.w-p.w-5, p.x));
+    p.y = Math.max(o.y+5, Math.min(o.y+sz.h-p.h-5, p.y));
+    const door = { x: 155, y: 240, w: 60, h: 40 };
+    const counter = { x: 40, y: 20, w: 300, h: 50 };
+    if (this.playerInZone(door, o)) UI.showPrompt('Click to exit shop');
+    else if (this.playerInZone(counter, o)) UI.showPrompt('Click to trade with humans');
     else UI.hidePrompt();
     UI.updateHUD(p);
   },
@@ -915,6 +1002,16 @@ const Game = {
     }
     const nearItems = this.getNearby(this.entities.groundItems, 40);
     if (nearItems.length > 0) { UI.showPrompt(`Click to pick up ${nearItems[0].type}`); return; }
+    // Human town shop prompt
+    if (this.humanTown) {
+      const sh = this.humanTown.shop;
+      const dx = (p.x+p.w/2)-(sh.x+25), dy = (p.y+p.h/2)-(sh.y+35);
+      if (Math.sqrt(dx*dx+dy*dy) < 40) {
+        if (p.isDisguised()) UI.showPrompt('Click to enter human shop');
+        else UI.showPrompt('⚠️ Wear clothes to enter shop');
+        return;
+      }
+    }
     if (eq && eq.type === 'axe') {
       const t = this.getNearby(this.entities.trees, 50);
       if (t.length > 0) { UI.showPrompt(`Click to chop tree (${t[0].slabs} slabs left)`); return; }
@@ -938,6 +1035,7 @@ const Game = {
     if (this.insideHouse) { this.renderHouseInterior(); return; }
     if (this.insideHotel) { this.renderHotelInterior(); return; }
     if (this.insideMarket) { this.renderMarketInterior(); return; }
+    if (this.insideHumanShop) { this.renderHumanShopInterior(); return; }
     const ctx = this.ctx, cam = this.camera, cw = this.canvas.width, ch = this.canvas.height;
     ctx.fillStyle = '#5a8f3c'; ctx.fillRect(0, 0, cw, ch);
     for (const tile of this.grassTiles) {
@@ -956,6 +1054,9 @@ const Game = {
     for (const h of this.entities.humans) if (h.alive) drawList.push(h);
     for (const g of this.entities.guests) if (g.alive) drawList.push(g);
     for (const v of this.entities.villagers) if (v.alive) drawList.push(v);
+    if (this.humanTown) {
+      for (const th of this.humanTown.townHumans) if (th.alive) drawList.push(th);
+    }
     drawList.push(this.player);
 
     // Draw pavements (below entities)
@@ -993,6 +1094,32 @@ const Game = {
           ctx.fillStyle = '#ffeb3b'; ctx.font = '11px sans-serif';
           ctx.fillText('✨' + hotel.goldBox, sx+28, sy+70);
         }
+      }});
+    }
+
+    // Draw human town buildings
+    if (this.humanTown) {
+      for (const th of this.humanTown.houses) {
+        drawList.push({ y: th.y, h: 60, draw: (ctx, cam) => {
+          const sx = th.x-cam.x, sy = th.y-cam.y;
+          ctx.fillStyle = '#bcaaa4'; ctx.fillRect(sx, sy+15, 60, 45);
+          ctx.fillStyle = '#795548';
+          ctx.beginPath(); ctx.moveTo(sx-5, sy+15); ctx.lineTo(sx+30, sy-10); ctx.lineTo(sx+65, sy+15); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#4e342e'; ctx.fillRect(sx+22, sy+35, 16, 25);
+          ctx.fillStyle = '#fff9c4'; ctx.fillRect(sx+8, sy+22, 12, 10); ctx.fillRect(sx+40, sy+22, 12, 10);
+        }});
+      }
+      const sh = this.humanTown.shop;
+      drawList.push({ y: sh.y, h: 60, draw: (ctx, cam) => {
+        const sx = sh.x-cam.x, sy = sh.y-cam.y;
+        ctx.fillStyle = '#bcaaa4'; ctx.fillRect(sx, sy+18, 50, 35);
+        ctx.fillStyle = '#e53935';
+        ctx.beginPath(); ctx.moveTo(sx-3, sy+18); ctx.lineTo(sx+25, sy+4); ctx.lineTo(sx+53, sy+18); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffeb3b';
+        ctx.beginPath(); ctx.moveTo(sx+2, sy+18); ctx.lineTo(sx+25, sy+8); ctx.lineTo(sx+48, sy+18); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#4e342e'; ctx.fillRect(sx+18, sy+38, 14, 15);
+        ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif';
+        ctx.fillText('SHOP', sx+13, sy+16);
       }});
     }
 
@@ -1308,6 +1435,82 @@ const Game = {
     ctx.font = '11px sans-serif'; ctx.fillStyle = '#aaa'; ctx.fillText('🚪 Exit', dx+12, dy-4);
 
     this.player.draw(ctx, { x: 0, y: 0 });
+  },
+
+  renderHumanShopInterior() {
+    const ctx = this.ctx, cw = this.canvas.width, ch = this.canvas.height;
+    const o = this.getInteriorOrigin();
+    const w = 380, h = 280;
+
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, cw, ch);
+    ctx.fillStyle = '#d7ccc8'; ctx.fillRect(o.x, o.y, w, h);
+    ctx.strokeStyle = '#bcaaa4'; ctx.lineWidth = 0.5;
+    for (let y = o.y; y < o.y+h; y += 25) { ctx.beginPath(); ctx.moveTo(o.x, y); ctx.lineTo(o.x+w, y); ctx.stroke(); }
+    // Walls
+    ctx.fillStyle = '#8d6e63';
+    ctx.fillRect(o.x, o.y-10, w, 12);
+    ctx.fillRect(o.x-10, o.y, 12, h);
+    ctx.fillRect(o.x+w-2, o.y, 12, h);
+
+    // Counter
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(o.x+40, o.y+20, 300, 50);
+    ctx.fillStyle = '#795548'; ctx.fillRect(o.x+42, o.y+22, 296, 46);
+    // Goods
+    ctx.font = '16px serif';
+    ctx.fillText('⚔️', o.x+60, o.y+50);
+    ctx.fillText('🛡️', o.x+100, o.y+50);
+    ctx.fillText('🥪', o.x+140, o.y+50);
+    ctx.fillText('🍎', o.x+180, o.y+50);
+    ctx.fillText('⛏️', o.x+220, o.y+50);
+    ctx.fillText('🔪', o.x+260, o.y+50);
+    ctx.fillText('✨', o.x+300, o.y+50);
+
+    // Sign
+    ctx.fillStyle = '#4e342e'; ctx.fillRect(o.x+120, o.y+2, 140, 18);
+    ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
+    ctx.fillText('🏪 HUMAN TRADING POST', o.x+124, o.y+15);
+
+    // Human shopkeepers
+    const keepers = [{ x: 80, y: 8 }, { x: 190, y: 5 }, { x: 300, y: 8 }];
+    for (const k of keepers) {
+      const kx = o.x+k.x, ky = o.y+k.y;
+      ctx.fillStyle = '#ffe0b2';
+      ctx.beginPath(); ctx.arc(kx, ky+6, 7, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#5d4037';
+      ctx.beginPath(); ctx.arc(kx, ky+2, 7, Math.PI, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.fillRect(kx-3, ky+4, 2, 2); ctx.fillRect(kx+1, ky+4, 2, 2);
+    }
+
+    // Shelves
+    ctx.fillStyle = '#6d4c41'; ctx.fillRect(o.x+10, o.y+100, 50, 70);
+    ctx.fillStyle = '#8d6e63';
+    ctx.fillRect(o.x+12, o.y+102, 46, 20);
+    ctx.fillRect(o.x+12, o.y+125, 46, 20);
+    ctx.fillRect(o.x+12, o.y+148, 46, 20);
+    ctx.font = '12px serif';
+    ctx.fillText('⚔️🔪', o.x+16, o.y+118);
+    ctx.fillText('🛡️⛏️', o.x+16, o.y+140);
+    ctx.fillText('🥪🍎', o.x+16, o.y+164);
+
+    ctx.fillStyle = '#6d4c41'; ctx.fillRect(o.x+320, o.y+100, 50, 70);
+    ctx.fillStyle = '#8d6e63';
+    ctx.fillRect(o.x+322, o.y+102, 46, 20);
+    ctx.fillRect(o.x+322, o.y+125, 46, 20);
+    ctx.fillRect(o.x+322, o.y+148, 46, 20);
+    ctx.font = '12px serif';
+    ctx.fillText('🪵🪨', o.x+326, o.y+118);
+    ctx.fillText('✨✨', o.x+326, o.y+140);
+    ctx.fillText('🍖🥩', o.x+326, o.y+164);
+
+    // Door
+    const dx = o.x+155, dy = o.y+240;
+    ctx.fillStyle = '#4e342e'; ctx.fillRect(dx, dy, 60, 40);
+    ctx.fillStyle = '#795548'; ctx.fillRect(dx+4, dy+4, 52, 32);
+    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(dx+50, dy+20, 3, 0, Math.PI*2); ctx.fill();
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#aaa'; ctx.fillText('🚪 Exit', dx+12, dy-4);
+
+    this.player.draw(ctx, { x: 0, y: 0 });
   }
 };
 
@@ -1356,6 +1559,12 @@ const SaveSystem = {
       decorations: game.entities.decorations.map(d => ({ x:d.x, y:d.y, type:d.type })),
       hotels: game.hotels.map(h => ({ x: h.x, y: h.y, goldBox: h.goldBox })),
       villagers: game.entities.villagers.filter(v => v.alive).map(v => ({ x: v.x, y: v.y, type: v.type, houseIndex: v.houseIndex, homeX: v.homeX, homeY: v.homeY })),
+      humanTown: game.humanTown ? {
+        x: game.humanTown.x, y: game.humanTown.y,
+        houses: game.humanTown.houses,
+        shop: game.humanTown.shop,
+        townHumans: game.humanTown.townHumans.map(th => ({ x: th.x, y: th.y, homeX: th.homeX, homeY: th.homeY })),
+      } : null,
     };
     localStorage.setItem(this.SAVE_KEY, JSON.stringify(data));
   },
@@ -1454,6 +1663,14 @@ Game.loadFromSave = function(data) {
   // Load villagers
   if (data.villagers) {
     this.entities.villagers = data.villagers.map(v => { const vl = new Villager(v.x, v.y, v.type, v.houseIndex); vl.homeX = v.homeX; vl.homeY = v.homeY; return vl; });
+  }
+  // Load human town
+  if (data.humanTown) {
+    const ht = data.humanTown;
+    const townHumans = ht.townHumans.map(th => new TownHuman(th.x, th.y, th.homeX, th.homeY));
+    this.humanTown = { x: ht.x, y: ht.y, houses: ht.houses, shop: ht.shop, townHumans };
+  } else {
+    this.generateHumanTown();
   }
   // Load hotels array (with backward compat)
   if (data.hotels) {
