@@ -157,9 +157,10 @@ canvas {
   z-index: 20;
   color: #fff;
   min-width: 320px;
-  max-width: 560px;
-  max-height: 520px;
+  max-width: min(560px, 90vw);
+  max-height: min(80vh, calc(100% - 40px));
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #inventory-screen h2 {
@@ -217,6 +218,10 @@ canvas {
   z-index: 20;
   color: #fff;
   min-width: 300px;
+  max-width: 90vw;
+  max-height: min(80vh, calc(100% - 40px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #craft-menu h2 {
